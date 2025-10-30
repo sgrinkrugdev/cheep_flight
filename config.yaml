@@ -1,0 +1,29 @@
+timezone: America/New_York
+currency: USD
+adults: 1
+cabin: ECONOMY
+max_stops: 1
+log_csv: cheapest_log.csv
+
+routes:
+  - name: "DC→London peak 2026"
+    origin: WAS
+    destination: LON
+    start_date: 2026-07-13
+    end_date: 2026-08-31
+    durations: [10]
+  - name: "DC→Rome peak 2026"
+    origin: WAS
+    destination: ROM
+    start_date: 2026-07-13
+    end_date: 2026-08-31
+    durations: [10]
+
+email:
+  provider: sendgrid
+  from: you@example.com
+  to: you@example.com
+
+amadeus:
+  api_key: "YOUR_AMADEUS_KEY"
+  api_secret: "YOUR_AMADEUS_SECRET"
