@@ -9,14 +9,14 @@ routes:
   - name: "DC→London peak 2026"
     origin: WAS
     destination: LON
-    start_date: 2026-07-13
-    end_date: 2026-08-31
+    start_date: "2026-07-13"
+    end_date: "2026-08-31"
     durations: [10]
   - name: "DC→Rome peak 2026"
     origin: WAS
     destination: ROM
-    start_date: 2026-07-13
-    end_date: 2026-08-31
+    start_date: "2026-07-13"
+    end_date: "2026-08-31"
     durations: [10]
 
 email:
