@@ -123,8 +123,13 @@ def run_search(cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
     for route in cfg["routes"]:
         origin = route["origin"]
         dest = route["destination"]
-        start = date.fromisoformat(route["start_date"])
-        end = date.fromisoformat(route["end_date"])
+#        start = date.fromisoformat(route["start_date"])
+#        end = date.fromisoformat(route["end_date"])
+        # Coerce YAML-loaded values (which may already be date objects) to strings
+        start_raw = route["start_date"]
+        end_raw = route["end_date"]
+        start = date.fromisoformat(str(start_raw))
+        end = date.fromisoformat(str(end_raw))
         durations = route.get("durations", [10])
         for dur in durations:
             dur = int(dur)
