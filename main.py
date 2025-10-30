@@ -123,8 +123,7 @@ def run_search(cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
     for route in cfg["routes"]:
         origin = route["origin"]
         dest = route["destination"]
-        #start = date.fromisoformat(route["start_date"])
-        #end = date.fromisoformat(route["end_date"])
+
         # Coerce YAML-loaded values (which may already be date objects) to strings
         start_raw = route["start_date"]
         end_raw = route["end_date"]
@@ -211,6 +210,12 @@ def build_daily_digest(best, cfg):
 def main():
     cfg_path = os.getenv("CONFIG_PATH", "config.yaml")
     cfg = load_config(cfg_path)
+    # Normalize dates to strings so downstream parsing is stable (PyYAML may load them as date objects)
+    for r in cfg.get("routes", []):
+        for k in ("start_date", "end_date"):
+            if k in r and not isinstance(r[k], str):
+                r[k] = str(r[k])
+
     best = run_search(cfg)
     append_log(cfg.get("log_csv", "cheapest_log.csv"), best)
     subj = "Flight Watcher: Daily cheapest picks"
