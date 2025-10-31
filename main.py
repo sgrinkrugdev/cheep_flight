@@ -302,19 +302,20 @@ def send_email_sendgrid(subject: str, html: str, to_email: str, from_email: str)
         raise RuntimeError(f"SendGrid error: {r.status_code} {r.text}")
 
 def build_daily_digest(best, cfg):
-    """Compact digest: bold header + two segment lines; shows total flight time."""
+    """Compact digest: bold header + two segment lines + per-result footer with search params."""
+    # -------- helpers --------
     def _parse(dt):
         if not dt: return None
         try: return datetime.fromisoformat(dt.replace("Z", "+00:00"))
         except Exception: return None
 
-    def _day(dt):  # "4 Dec"
+    def _day(dt):   # "4 Dec"
         return dt.strftime("%-d %b") if dt else ""
 
     def _time(dt):  # "8:30 PM"
         return dt.strftime("%-I:%M %p") if dt else ""
 
-    def _dur(dep, arr):  # minutes
+    def _dur_minutes(dep, arr):
         if not dep or not arr: return 0
         return int((arr - dep).total_seconds() // 60)
 
@@ -325,11 +326,19 @@ def build_daily_digest(best, cfg):
     def _next_day(dep, arr):
         return "+1" if (dep and arr and arr.date() > dep.date()) else ""
 
-    def _stops(n): return "Nonstop" if n <= 0 else ("1 stop" if n == 1 else f"{n} stops")
+    def _stops_label(n):
+        return "Nonstop" if n <= 0 else ("1 stop" if n == 1 else f"{n} stops")
 
     def _first(segs): return segs[0] if segs else {}
     def _last(segs):  return segs[-1] if segs else {}
 
+    def _price_fmt(val, curr):
+        try:
+            return f"${float(val):,.2f} {curr}".strip()
+        except Exception:
+            return f"{val} {curr}".strip()
+
+    # -------- body --------
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
     lines = [f"<h2>Daily Flight Watcher — {now}</h2>"]
 
@@ -339,59 +348,73 @@ def build_daily_digest(best, cfg):
 
     best = sorted(best, key=lambda x: (x.get("route_name",""), x.get("duration_days",0)))
 
+    # Pull global constraints (for footer display)
+    cfg_max_stops = cfg.get("max_stops", None)
+    stops_disp = "Any" if cfg_max_stops is None else str(cfg_max_stops)
+    cfg_mfd = cfg.get("max_flight_duration", None)
+    mfd_disp = "No limit" if cfg_mfd is None else f"{int(cfg_mfd)} hours"
+
     for r in best:
         outs = r.get("outbound_segments", [])
         rets = r.get("return_segments", [])
         o0, oN = _first(outs), _last(outs)
         r0, rN = _first(rets), _last(rets)
 
-        # Parse times
+        # Times & durations
         o_dep_dt, o_arr_dt = _parse(o0.get("dep_at","")), _parse(oN.get("arr_at",""))
         r_dep_dt, r_arr_dt = _parse(r0.get("dep_at","")), _parse(rN.get("arr_at",""))
-
-        # Durations
-        out_mins = _dur(o_dep_dt, o_arr_dt)
-        ret_mins = _dur(r_dep_dt, r_arr_dt)
+        out_mins = _dur_minutes(o_dep_dt, o_arr_dt)
+        ret_mins = _dur_minutes(r_dep_dt, r_arr_dt)
         total_mins = out_mins + ret_mins
 
-        # Bold header line
+        # Header (bold)
         dep_air = o0.get("dep_airport","") or r0.get("dep_airport","")
         arr_air = oN.get("arr_airport","")  or rN.get("arr_airport","")
-        price   = r.get("price","")
-        curr    = r.get("currency","")
+        price   = _price_fmt(r.get("price",""), r.get("currency",""))
         start_d = r.get("depart_date","")
         end_d   = r.get("return_date","")
         header  = (
-            f"<b>{dep_air} to {arr_air} ${price} {curr} "
-            f"{start_d} – {end_d}, Total Flight Time {_dur_label(total_mins)}</b>"
+            f"<b>{dep_air} to {arr_air} {price} {start_d} – {end_d}, "
+            f"Total Flight Time {_dur_label(total_mins)}</b>"
         )
         lines.append(f"<div>{header}</div>")
 
-        # Outbound line
+        # Outbound (single line)
         if outs:
             o_line = (
                 f"{o0.get('carrier_name','')} {o0.get('flight_number','')} "
                 f"{_day(o_dep_dt)} · {_time(o_dep_dt)}–{_time(o_arr_dt)}{_next_day(o_dep_dt,o_arr_dt)}"
                 f"&nbsp;&nbsp; {_dur_label(out_mins)} "
                 f"{o0.get('dep_airport','')}–{oN.get('arr_airport','')}"
-                f"&nbsp;&nbsp; {_stops(len(outs)-1)}"
+                f"&nbsp;&nbsp; {_stops_label(len(outs)-1)}"
             )
             lines.append(f"<div>{o_line}</div>")
 
-        # Return line
+        # Return (single line)
         if rets:
             r_line = (
                 f"{r0.get('carrier_name','')} {r0.get('flight_number','')} "
                 f"{_day(r_dep_dt)} · {_time(r_dep_dt)}–{_time(r_arr_dt)}{_next_day(r_dep_dt,r_arr_dt)}"
                 f"&nbsp;&nbsp; {_dur_label(ret_mins)} "
                 f"{r0.get('dep_airport','')}–{rN.get('arr_airport','')}"
-                f"&nbsp;&nbsp; {_stops(len(rets)-1)}"
+                f"&nbsp;&nbsp; {_stops_label(len(rets)-1)}"
             )
             lines.append(f"<div>{r_line}</div>")
 
-        lines.append("<br>")  # spacing
+        # --- Footer with key search parameters ---
+        trip_dur = r.get("duration_days", "")
+        footer1 = f"Stops: {stops_disp}, Max Flight Duration: {mfd_disp}"
+        footer2 = (
+            f"Flying from {dep_air} to {arr_air} for {trip_dur} days "
+            f"between {start_d} and {end_d}"
+        )
+        lines.append(f"<div style='color:#555'>{footer1}</div>")
+        lines.append(f"<div style='color:#555'>{footer2}</div>")
+
+        lines.append("<br>")  # spacing between results
 
     return "\n".join(lines)
+
 
 
 
