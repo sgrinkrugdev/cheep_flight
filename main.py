@@ -68,6 +68,8 @@ def summarize_offer(offer: dict) -> Dict[str, Any]:
 
 def search_cheapest_for_window(token: str, origin: str, dest: str, depart: date, duration: int, 
                                adults: int, cabin: Optional[str], currency: str, max_stops: Optional[int]) -> Optional[Dict[str,Any]]:
+    from time import sleep
+
     return_date = depart + timedelta(days=duration)
     params = {
         "originLocationCode": origin,
@@ -76,61 +78,72 @@ def search_cheapest_for_window(token: str, origin: str, dest: str, depart: date,
         "returnDate": iso(return_date),
         "adults": str(adults),
         "currencyCode": currency,
-        "max": "20",
-        "sort": "PRICE"
+        "max": "20"  # keep; 'sort' is NOT supported on some test endpoints
     }
     if cabin:
         params["travelClass"] = cabin  # ECONOMY, PREMIUM_ECONOMY, BUSINESS, FIRST
 
     headers = {"Authorization": f"Bearer {token}"}
-    try:
-        resp = requests.get(AMAD_SEARCH_URL, headers=headers, params=params, timeout=30)
-    except Exception as e:
-        print(f"[debug] {origin}->{dest} {depart} dur={duration}: request failed: {e}")
-        return None
 
-    if resp.status_code >= 400:
-        # Show the error body to understand test-env behavior
-        body = resp.text[:400].replace("\n", " ")
-        print(f"[debug] {origin}->{dest} {depart} dur={duration}: HTTP {resp.status_code} {body}")
-        return None
+    # simple retry (once) for 429
+    for attempt in (1, 2):
+        try:
+            resp = requests.get(AMAD_SEARCH_URL, headers=headers, params=params, timeout=30)
+        except Exception as e:
+            print(f"[debug] {origin}->{dest} {depart} dur={duration}: request failed: {e}")
+            return None
 
-    data = resp.json()
-    offers = data.get("data", [])
-    pre = len(offers)
+        if resp.status_code == 429:
+            print(f"[debug] {origin}->{dest} {depart} dur={duration}: 429 rate limited, retrying…")
+            sleep(1.5)
+            continue
 
-    if not offers:
-        print(f"[debug] {origin}->{dest} {depart} dur={duration}: offers=0")
-        return None
+        if resp.status_code >= 400:
+            # show first part of body for diagnosis
+            body = resp.text[:400].replace("\n", " ")
+            print(f"[debug] {origin}->{dest} {depart} dur={duration}: HTTP {resp.status_code} {body}")
+            return None
 
-    # Filter by stops if requested
-    if max_stops is not None:
-        filtered = []
-        for o in offers:
-            it0 = safe_get(o, ["itineraries", 0, "segments"], [])
-            it1 = safe_get(o, ["itineraries", 1, "segments"], [])
-            stops0 = max(0, len(it0) - 1)
-            stops1 = max(0, len(it1) - 1)
-            if stops0 <= max_stops and stops1 <= max_stops:
-                filtered.append(o)
-        offers = filtered or offers
+        data = resp.json()
+        offers = data.get("data", [])
+        pre = len(offers)
+        if not offers:
+            print(f"[debug] {origin}->{dest} {depart} dur={duration}: offers=0")
+            return None
 
-    post = len(offers)
-    cheapest = pick_cheapest_offer(offers)
-    if not cheapest:
-        print(f"[debug] {origin}->{dest} {depart} dur={duration}: offers_pre={pre} offers_post={post} cheapest=n/a")
-        return None
+        # Filter by stops if requested
+        if max_stops is not None:
+            filtered = []
+            for o in offers:
+                it0 = safe_get(o, ["itineraries", 0, "segments"], [])
+                it1 = safe_get(o, ["itineraries", 1, "segments"], [])
+                stops0 = max(0, len(it0) - 1)
+                stops1 = max(0, len(it1) - 1)
+                if stops0 <= max_stops and stops1 <= max_stops:
+                    filtered.append(o)
+            offers = filtered or offers
 
-    summary = summarize_offer(cheapest)
-    print(f"[debug] {origin}->{dest} {depart} dur={duration}: offers_pre={pre} offers_post={post} cheapest={summary['price']} {summary['currency']}")
+        post = len(offers)
+        cheapest = pick_cheapest_offer(offers)
+        if not cheapest:
+            print(f"[debug] {origin}->{dest} {depart} dur={duration}: offers_pre={pre} offers_post={post} cheapest=n/a")
+            return None
 
-    summary.update({
-        "origin": origin,
-        "destination": dest,
-        "depart_date": iso(depart),
-        "return_date": iso(return_date),
-    })
-    return summary
+        summary = summarize_offer(cheapest)
+        print(f"[debug] {origin}->{dest} {depart} dur={duration}: offers_pre={pre} offers_post={post} cheapest={summary['price']} {summary['currency']}")
+
+        summary.update({
+            "origin": origin,
+            "destination": dest,
+            "depart_date": iso(depart),
+            "return_date": iso(return_date),
+        })
+        return summary
+
+    # fell through retries
+    print(f"[debug] {origin}->{dest} {depart} dur={duration}: 429 persisted, skipping")
+    return None
+
 
 
 def run_search(cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
