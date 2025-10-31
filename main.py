@@ -282,7 +282,11 @@ def run_search(cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
 def ensure_log(path: str):
     if not os.path.exists(path):
         with open(path, "w", newline="", encoding="utf-8") as f:
-            f.write("run_ts,route_name,origin,destination,depart_date,return_date,duration_days,airline,price,currency,stops_out,stops_ret,out_depart,ret_depart\n")
+            f.write(
+                "run_ts,route_name,origin,destination,depart_date,return_date,"
+                "duration_days,airline,price,currency,stops_out,stops_ret,"
+                "out_depart,ret_depart,out_flight,ret_flight\n"
+            )
 
 def append_log(path: str, rows: List[Dict[str, Any]]):
     ensure_log(path)
@@ -290,11 +294,14 @@ def append_log(path: str, rows: List[Dict[str, Any]]):
         for r in rows:
             f.write(",".join([
                 datetime.utcnow().isoformat(),
-                r["route_name"], r["origin"], r["destination"],
-                r["depart_date"], r["return_date"],
-                str(r["duration_days"]), r["airline"], str(r["price"]), r["currency"],
-                str(r["stops_out"]), str(r["stops_ret"]), r["out_depart"], r["ret_depart"]
+                r.get("route_name",""), r.get("origin",""), r.get("destination",""),
+                r.get("depart_date",""), r.get("return_date",""),
+                str(r.get("duration_days","")), r.get("airline",""), str(r.get("price","")), r.get("currency",""),
+                str(r.get("stops_out","")), str(r.get("stops_ret","")),
+                r.get("out_depart",""), r.get("ret_depart",""),
+                r.get("out_flight",""), r.get("ret_flight",""),
             ]) + "\n")
+
 
 def send_email_sendgrid(subject: str, html: str, to_email: str, from_email: str):
     key = os.getenv("SENDGRID_API_KEY")
