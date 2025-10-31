@@ -12,6 +12,14 @@ jobs:
         with:
           python-version: '3.11'
       - run: pip install -r requirements.txt
+      - name: Verify code on runner
+        run: |
+          echo "Commit: $GITHUB_SHA"
+          echo "Looking for old fromisoformat call…"
+          grep -n 'fromisoformat(route\["start_date"\])' main.py || echo "Not found"
+          echo "---- main.py (first 220 lines, numbered) ----"
+          nl -ba main.py | sed -n '1,220p'
+
       - name: Run watcher
         env:
           SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
