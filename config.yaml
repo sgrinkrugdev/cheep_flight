@@ -2,22 +2,22 @@ timezone: America/New_York
 currency: USD
 adults: 1
 cabin: ECONOMY
-max_stops: 1
+max_stops: null
 log_csv: cheapest_log.csv
 
 routes:
-  - name: "DC→London peak 2026"
-    origin: WAS
-    destination: LON
-    start_date: "2026-07-13"
-    end_date: "2026-08-31"
-    durations: [10]
-  - name: "DC→Rome peak 2026"
-    origin: WAS
-    destination: ROM
-    start_date: "2026-07-13"
-    end_date: "2026-08-31"
-    durations: [10]
+  - name: "IAD→LHR test"
+    origin: IAD
+    destination: LHR
+    start_date: "2025-12-01"   # use near-term dates to test
+    end_date:   "2025-12-15"
+    durations: [7,10]
+  - name: "IAD→FCO test"
+    origin: IAD
+    destination: FCO
+    start_date: "2025-12-01"
+    end_date:   "2025-12-15"
+    durations: [7,10]
 
 email:
   provider: sendgrid
