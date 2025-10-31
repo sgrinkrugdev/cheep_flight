@@ -7,6 +7,14 @@ import yaml
 AMAD_AUTH_URL = "https://test.api.amadeus.com/v1/security/oauth2/token"
 AMAD_SEARCH_URL = "https://test.api.amadeus.com/v2/shopping/flight-offers"
 
+def fmt_dt(dt_iso: str) -> str:
+    """Format ISO string like 2025-01-01T12:01:00 to 'Jan 01, 2025 12:01 PM'."""
+    try:
+        dt_iso = dt_iso.replace("Z", "+00:00")
+        return datetime.fromisoformat(dt_iso).strftime("%b %d, %Y %I:%M %p")
+    except Exception:
+        return dt_iso
+
 def load_config(path: str) -> Dict[str, Any]:
     with open(path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
@@ -48,23 +56,51 @@ def pick_cheapest_offer(offers: List[dict]) -> Optional[dict]:
             best = o
     return best
 
-def summarize_offer(offer: dict) -> Dict[str, Any]:
+def summarize_offer(offer: dict, carriers: Dict[str, str]) -> Dict[str, Any]:
     price = float(safe_get(offer, ["price", "grandTotal"], safe_get(offer, ["price","total"], "nan")))
     currency = safe_get(offer, ["price", "currency"], "USD")
     validating = safe_get(offer, ["validatingAirlineCodes", 0], "N/A")
+
     itin0 = safe_get(offer, ["itineraries", 0], {})
     itin1 = safe_get(offer, ["itineraries", 1], {})
-    dep0 = safe_get(itin0, ["segments", 0, "departure", "at"], "")
-    dep1 = safe_get(itin1, ["segments", 0, "departure", "at"], "")
+
+    def map_segments(itin):
+        segs_out = []
+        for seg in safe_get(itin, ["segments"], []) or []:
+            cc = str(seg.get("carrierCode", "") or "")
+            no = str(seg.get("number", "") or "")
+            dep = seg.get("departure", {}) or {}
+            arr = seg.get("arrival", {}) or {}
+            segs_out.append({
+                "carrier_code": cc,
+                "carrier_name": carriers.get(cc, cc),
+                "flight_number": f"{cc}{no}" if (cc or no) else "",
+                "dep_airport": dep.get("iataCode", ""),
+                "arr_airport": arr.get("iataCode", ""),
+                "dep_at": dep.get("at", ""),
+                "arr_at": arr.get("at", ""),
+            })
+        return segs_out
+
+    outbound_segments = map_segments(itin0)
+    return_segments  = map_segments(itin1)
+
+    # First-segment timestamps for quick summary fields (kept for subject/overview)
+    out0 = outbound_segments[0] if outbound_segments else {}
+    ret0 = return_segments[0]  if return_segments  else {}
+
     return {
         "price": price,
         "currency": currency,
-        "airline": validating,
-        "out_depart": dep0,
-        "ret_depart": dep1,
-        "stops_out": max(0, len(safe_get(itin0, ["segments"], [])) - 1),
-        "stops_ret": max(0, len(safe_get(itin1, ["segments"], [])) - 1),
+        "airline": validating,  # validating airline code
+        "outbound_segments": outbound_segments,
+        "return_segments": return_segments,
+        "out_depart": out0.get("dep_at", ""),
+        "ret_depart": ret0.get("dep_at", ""),
+        "stops_out": max(0, len(outbound_segments) - 1),
+        "stops_ret": max(0, len(return_segments) - 1),
     }
+
 
 def search_cheapest_for_window(token: str, origin: str, dest: str, depart: date, duration: int, 
                                adults: int, cabin: Optional[str], currency: str, max_stops: Optional[int]) -> Optional[Dict[str,Any]]:
@@ -105,6 +141,7 @@ def search_cheapest_for_window(token: str, origin: str, dest: str, depart: date,
             return None
 
         data = resp.json()
+        carriers = data.get("dictionaries", {}).get("carriers", {})
         offers = data.get("data", [])
         pre = len(offers)
         if not offers:
@@ -129,7 +166,8 @@ def search_cheapest_for_window(token: str, origin: str, dest: str, depart: date,
             print(f"[debug] {origin}->{dest} {depart} dur={duration}: offers_pre={pre} offers_post={post} cheapest=n/a")
             return None
 
-        summary = summarize_offer(cheapest)
+        summary = summarize_offer(cheapest, carriers)
+
         print(f"[debug] {origin}->{dest} {depart} dur={duration}: offers_pre={pre} offers_post={post} cheapest={summary['price']} {summary['currency']}")
 
         summary.update({
@@ -229,21 +267,85 @@ def send_email_sendgrid(subject: str, html: str, to_email: str, from_email: str)
         raise RuntimeError(f"SendGrid error: {r.status_code} {r.text}")
 
 def build_daily_digest(best, cfg):
+    """HTML email body with per-segment details (airline name, flight number, dep/arr times)."""
+    def fmt_dt(dt_iso: str) -> str:
+        # 2025-01-01T12:01:00[Z] -> 'Jan 01, 2025 12:01 PM'
+        try:
+            s = (dt_iso or "").replace("Z", "+00:00")
+            return datetime.fromisoformat(s).strftime("%b %d, %Y %I:%M %p")
+        except Exception:
+            return dt_iso or ""
+
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
     lines = [f"<h2>Daily Flight Watcher — {now}</h2>"]
+
     if not best:
         lines.append("<p>No offers found today.</p>")
-    else:
-        lines.append("<ul>")
-        for r in sorted(best, key=lambda x: (x['route_name'], x['duration_days'])):
-            lines.append(
-                f"<li><b>{r['route_name']}</b> — {r['duration_days']} days: "
-                f"Depart <b>{r['depart_date']}</b>, Return <b>{r['return_date']}</b> — "
-                f"{r['airline']} — <b>{r['price']} {r['currency']}</b> "
-                f"(stops out/ret: {r['stops_out']}/{r['stops_ret']})</li>"
-            )
-        lines.append("</ul>")
+        return "\n".join(lines)
+
+    lines.append("<ul>")
+    # Sort by route then duration for a tidy email
+    for r in sorted(best, key=lambda x: (x.get('route_name',''), x.get('duration_days', 0))):
+        price = f"{r.get('price','')} {r.get('currency','')}".strip()
+        route = r.get('route_name', '')
+        dur   = r.get('duration_days', '')
+        dep   = r.get('depart_date', '')
+        ret   = r.get('return_date', '')
+        stops_out = r.get('stops_out', 0)
+        stops_ret = r.get('stops_ret', 0)
+
+        lines.append(
+            f"<li><b>{route}</b> — {dur} days — "
+            f"<b>{price}</b> "
+            f"(stops out/ret: {stops_out}/{stops_ret})<br>"
+            f"Window: depart <b>{dep}</b>, return <b>{ret}</b><br>"
+        )
+
+        # Outbound segments
+        outs = r.get("outbound_segments", [])
+        if outs:
+            lines.append("<div><u>Outbound</u><ul>")
+            for seg in outs:
+                flight = seg.get("flight_number", "")
+                airline = seg.get("carrier_name", seg.get("carrier_code",""))
+                dep_air = seg.get("dep_airport","")
+                arr_air = seg.get("arr_airport","")
+                dep_at  = fmt_dt(seg.get("dep_at",""))
+                arr_at  = fmt_dt(seg.get("arr_at",""))
+                lines.append(
+                    "<li>"
+                    f"Flight <b>{flight}</b> {airline} — "
+                    f"Departs <b>{dep_air}</b> {dep_at} — "
+                    f"Arrives <b>{arr_air}</b> {arr_at}"
+                    "</li>"
+                )
+            lines.append("</ul></div>")
+
+        # Return segments
+        rets = r.get("return_segments", [])
+        if rets:
+            lines.append("<div><u>Return</u><ul>")
+            for seg in rets:
+                flight = seg.get("flight_number", "")
+                airline = seg.get("carrier_name", seg.get("carrier_code",""))
+                dep_air = seg.get("dep_airport","")
+                arr_air = seg.get("arr_airport","")
+                dep_at  = fmt_dt(seg.get("dep_at",""))
+                arr_at  = fmt_dt(seg.get("arr_at",""))
+                lines.append(
+                    "<li>"
+                    f"Flight <b>{flight}</b> {airline} — "
+                    f"Departs <b>{dep_air}</b> {dep_at} — "
+                    f"Arrives <b>{arr_air}</b> {arr_at}"
+                    "</li>"
+                )
+            lines.append("</ul></div>")
+
+        lines.append("</li>")  # end route item
+
+    lines.append("</ul>")
     return "\n".join(lines)
+
 
 def main():
     cfg_path = os.getenv("CONFIG_PATH", "config.yaml")
