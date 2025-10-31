@@ -19,6 +19,15 @@ jobs:
           grep -n 'fromisoformat(route\["start_date"\])' main.py || echo "Not found"
           echo "---- main.py (first 220 lines, numbered) ----"
           nl -ba main.py | sed -n '1,220p'
+      - name: Verify code on runner
+        run: |
+          echo "Commit SHA: $GITHUB_SHA"
+          echo "--- Repo root listing ---"
+          ls -la
+          echo "--- Search for old fromisoformat call ---"
+          grep -n 'fromisoformat(route\["start_date"\])' main.py || echo "Not found"
+          echo "--- First 220 lines of main.py (numbered) ---"
+          nl -ba main.py | sed -n '1,220p'
 
       - name: Run watcher
         env:
