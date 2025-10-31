@@ -80,33 +80,58 @@ def search_cheapest_for_window(token: str, origin: str, dest: str, depart: date,
         "sort": "PRICE"
     }
     if cabin:
-        params["travelClass"] = cabin
+        params["travelClass"] = cabin  # ECONOMY, PREMIUM_ECONOMY, BUSINESS, FIRST
+
     headers = {"Authorization": f"Bearer {token}"}
-    resp = requests.get(AMAD_SEARCH_URL, headers=headers, params=params, timeout=30)
-    if resp.status_code >= 400:
+    try:
+        resp = requests.get(AMAD_SEARCH_URL, headers=headers, params=params, timeout=30)
+    except Exception as e:
+        print(f"[debug] {origin}->{dest} {depart} dur={duration}: request failed: {e}")
         return None
+
+    if resp.status_code >= 400:
+        # Show the error body to understand test-env behavior
+        body = resp.text[:400].replace("\n", " ")
+        print(f"[debug] {origin}->{dest} {depart} dur={duration}: HTTP {resp.status_code} {body}")
+        return None
+
     data = resp.json()
     offers = data.get("data", [])
+    pre = len(offers)
+
     if not offers:
+        print(f"[debug] {origin}->{dest} {depart} dur={duration}: offers=0")
         return None
+
+    # Filter by stops if requested
     if max_stops is not None:
-        fil = []
+        filtered = []
         for o in offers:
             it0 = safe_get(o, ["itineraries", 0, "segments"], [])
             it1 = safe_get(o, ["itineraries", 1, "segments"], [])
-            if max(0, len(it0)-1) <= max_stops and max(0, len(it1)-1) <= max_stops:
-                fil.append(o)
-        offers = fil or offers
+            stops0 = max(0, len(it0) - 1)
+            stops1 = max(0, len(it1) - 1)
+            if stops0 <= max_stops and stops1 <= max_stops:
+                filtered.append(o)
+        offers = filtered or offers
+
+    post = len(offers)
     cheapest = pick_cheapest_offer(offers)
     if not cheapest:
+        print(f"[debug] {origin}->{dest} {depart} dur={duration}: offers_pre={pre} offers_post={post} cheapest=n/a")
         return None
-    s = summarize_offer(cheapest)
-    s.update({
-        "origin": origin, "destination": dest,
+
+    summary = summarize_offer(cheapest)
+    print(f"[debug] {origin}->{dest} {depart} dur={duration}: offers_pre={pre} offers_post={post} cheapest={summary['price']} {summary['currency']}")
+
+    summary.update({
+        "origin": origin,
+        "destination": dest,
         "depart_date": iso(depart),
         "return_date": iso(return_date),
     })
-    return s
+    return summary
+
 
 def run_search(cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
     ci = os.getenv("AMADEUS_API_KEY") or cfg["amadeus"]["api_key"]
