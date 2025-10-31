@@ -77,13 +77,23 @@ jobs:
         run: |
           mkdir -p ~/.config/rclone
           echo "$GDRIVE_SA_JSON" > sa.json
-          cat > ~/.config/rclone/rclone.conf <<RC
+      
+          # 1) Write a template with variables (quoted heredoc OK)
+          cat > rclone.conf.tmpl <<'RC'
           [gdrive]
           type = drive
           scope = drive
           service_account_file = sa.json
           root_folder_id = ${GDRIVE_FOLDER_ID}
           RC
+          
+          # 2) Expand variables into the real config
+          # (envsubst comes with the Ubuntu runner; if not, install: sudo apt-get update && sudo apt-get install -y gettext-base)
+          envsubst < rclone.conf.tmpl > ~/.config/rclone/rclone.conf
+      
+          echo "rclone.conf written:"
+          cat ~/.config/rclone/rclone.conf
+
 
       - name: Upload CSV to Google Drive (rolling copy)
         if: always()
