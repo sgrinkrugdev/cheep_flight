@@ -28,6 +28,26 @@ jobs:
           grep -n 'fromisoformat(route\["start_date"\])' main.py || echo "Not found"
           echo "--- First 220 lines of main.py (numbered) ---"
           nl -ba main.py | sed -n '1,220p'
+      - name: Hotfix dates in main.py on runner
+        run: |
+          python - << 'PY'
+          import re, io, sys
+          p='main.py'
+          s=open(p,'r',encoding='utf-8').read()
+          # Replace any old direct fromisoformat calls with safe coercion
+          s=re.sub(r'date\.fromisoformat\(route\["start_date"\]\)', 'date.fromisoformat(str(route["start_date"]))', s)
+          s=re.sub(r'date\.fromisoformat\(route\["end_date"\]\)', 'date.fromisoformat(str(route["end_date"]))', s)
+          open(p,'w',encoding='utf-8').write(s)
+          print("Hotfix applied to main.py")
+          PY
+
+      - name: Verify after hotfix
+        run: |
+          echo "--- Search for old fromisoformat calls AFTER HOTFIX ---"
+          grep -n 'fromisoformat(route\["start_date"\])' main.py || echo "Not found"
+          grep -n 'fromisoformat(route\["end_date"\])' main.py   || echo "Not found"
+          echo "--- Show lines 110-140 of main.py ---"
+          nl -ba main.py | sed -n '110,140p'
 
       - name: Run watcher
         env:
