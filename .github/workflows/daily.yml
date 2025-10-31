@@ -1,4 +1,8 @@
 name: Daily Flight Watcher
+
+permissions:
+  contents: write
+
 on:
   schedule:
     - cron: "5 12 * * *"   # 08:00 in New York during DST (EDT = UTC-4)
