@@ -11,13 +11,13 @@ routes:
     destination: LHR
     start_date: "2025-12-01"   # use near-term dates to test
     end_date:   "2025-12-15"
-    durations: [7,10]
+    durations: [10]
   - name: "IAD→FCO test"
     origin: IAD
     destination: FCO
     start_date: "2025-12-01"
     end_date:   "2025-12-15"
-    durations: [7,10]
+    durations: [10]
 
 email:
   provider: sendgrid
