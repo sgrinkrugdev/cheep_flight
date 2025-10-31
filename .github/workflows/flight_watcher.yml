@@ -1,0 +1,13 @@
+name: "Daily Flight Watcher"
+run-name: "Daily Flight Watcher — ${{ github.event_name }} by ${{ github.actor }}"
+
+on:
+  workflow_dispatch: {}   # enables the Run workflow button
+  schedule:
+    - cron: "5 12 * * *"
+
+jobs:
+  sanity:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Workflow recognized ✅"
