@@ -1,7 +1,7 @@
 name: Daily Flight Watcher
 on:
   schedule:
-    - cron: "5 13 * * *"   # runs daily at 13:05 UTC
+    - cron: "5 12 * * *"   # 08:00 in New York during DST (EDT = UTC-4)
   workflow_dispatch: {}     # lets you run it manually
 jobs:
   run:
