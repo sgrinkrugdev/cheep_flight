@@ -21,9 +21,13 @@ routes:
     durations: [10]
 
 email:
-  provider: sendgrid
+  provider: ipower          # "ipower" or "sendgrid"
   from: you@example.com
-  to: you@example.com
+  to:   you@example.com
+  # Optional fallbacks (we’ll prefer GitHub Secrets env vars)
+  smtp_host: smtp.ipower.com
+  smtp_port: 465
+
 
 amadeus:
   api_key: "YOUR_AMADEUS_KEY"
