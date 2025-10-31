@@ -80,7 +80,7 @@ jobs:
           scope = drive
           service_account_file = sa.json
           root_folder_id = ${GDRIVE_FOLDER_ID}
-RC
+          RC
 
       - name: Upload CSV to Google Drive (rolling copy)
         if: always()
