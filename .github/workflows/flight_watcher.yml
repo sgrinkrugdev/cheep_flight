@@ -14,18 +14,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: true   # keep GITHUB_TOKEN for later git push
+          fetch-depth: 0    # <-- full history so rebase works reliably
 
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       - run: pip install -r requirements.txt
-      - name: Verify code on runner
-        run: |
-          echo "Commit: $GITHUB_SHA"
-          echo "Looking for old fromisoformat call…"
-          grep -n 'fromisoformat(route\["start_date"\])' main.py || echo "Not found"
-          echo "---- main.py (first 220 lines, numbered) ----"
-          nl -ba main.py | sed -n '1,220p'
       - name: Verify code on runner
         run: |
           echo "Commit SHA: $GITHUB_SHA"
@@ -35,6 +29,7 @@ jobs:
           grep -n 'fromisoformat(route\["start_date"\])' main.py || echo "Not found"
           echo "--- First 220 lines of main.py (numbered) ---"
           nl -ba main.py | sed -n '1,220p'
+
 
       - name: Run watcher
         env:
@@ -77,22 +72,23 @@ jobs:
         run: |
           mkdir -p ~/.config/rclone
           echo "$GDRIVE_SA_JSON" > sa.json
-          cat > ~/.config/rclone/rclone.conf <<'RC'
+          cat > ~/.config/rclone/rclone.conf <<RC
           [gdrive]
           type = drive
           scope = drive
           service_account_file = sa.json
           root_folder_id = ${GDRIVE_FOLDER_ID}
-          RC
+RC
 
       - name: Upload CSV to Google Drive (rolling copy)
         if: always()
+        #continue-on-error: true #If you don’t want Drive hiccups to fail the whole job
         run: |
           rclone copyto cheapest_log.csv gdrive:cheapest_log.csv -v
 
       - name: Upload timestamped backup to Google Drive
         if: always()
+        #continue-on-error: true #If you don’t want Drive hiccups to fail the whole job
         run: |
           ts=$(date -u +'%Y-%m-%d_%H-%M-%S')
           rclone copyto cheapest_log.csv gdrive:cheapest_log_${ts}.csv -v
-
