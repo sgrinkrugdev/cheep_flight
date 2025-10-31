@@ -1,4 +1,6 @@
 name: Daily Flight Watcher
+run-name: "Daily Flight Watcher — ${{ github.event_name }} by ${{ github.actor }}"
+
 
 permissions:
   contents: write
