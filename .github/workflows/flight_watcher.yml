@@ -94,6 +94,15 @@ jobs:
           echo "rclone.conf written:"
           cat ~/.config/rclone/rclone.conf
 
+      # --- place the two debug steps here ---
+      - name: Show rclone.conf
+        if: always()
+        run: cat ~/.config/rclone/rclone.conf
+
+      - name: Can we list the target folder?
+        if: always()
+        run: rclone lsd gdrive:
+      # --- end debug steps ---
 
       - name: Upload CSV to Google Drive (rolling copy)
         if: always()
