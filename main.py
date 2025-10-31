@@ -321,6 +321,23 @@ def send_email_sendgrid(subject: str, html: str, to_email: str, from_email: str)
     )
     if r.status_code >= 300:
         raise RuntimeError(f"SendGrid error: {r.status_code} {r.text}")
+
+def send_email_ipower(subject: str, html: str, to_email: str, from_email: str,
+                      host: str, port: int, username: str, password: str):
+    import smtplib, ssl
+    from email.mime.text import MIMEText
+
+    msg = MIMEText(html, "html", "utf-8")
+    msg["Subject"] = subject
+    msg["From"] = from_email
+    msg["To"] = to_email
+
+    context = ssl.create_default_context()
+    with smtplib.SMTP_SSL(host=host, port=int(port), context=context, timeout=30) as server:
+        server.login(username, password)
+        server.sendmail(from_email, [to_email], msg.as_string())
+
+
 def build_daily_digest(best, cfg):
     """
     Compact digest email:
@@ -505,12 +522,32 @@ def main():
 
     best = run_search(cfg)
     append_log(cfg.get("log_csv", "cheapest_log.csv"), best)
+    
     subj = "Flight Watcher: Daily cheapest picks"
     html = build_daily_digest(best, cfg)
-    to_email = os.getenv("TO_EMAIL") or cfg["email"]["to"]
-    from_email = os.getenv("FROM_EMAIL") or cfg["email"]["from"]
-    send_email_sendgrid(subj, html, to_email, from_email)
-    print("Email sent. Entries:", len(best))
+
+    email_cfg = cfg.get("email", {})
+    provider = (email_cfg.get("provider") or "sendgrid").strip().lower()
+    to_email = os.getenv("TO_EMAIL") or email_cfg["to"]
+    from_email = os.getenv("FROM_EMAIL") or email_cfg["from"]
+
+    if provider in ("sendgrid", "sg"):
+        send_email_sendgrid(subj, html, to_email, from_email)
+    elif provider in ("ipower", "smtp"):
+        host = os.getenv("SMTP_HOST") or email_cfg.get("smtp_host", "smtp.ipower.com")
+        port = os.getenv("SMTP_PORT") or email_cfg.get("smtp_port", 465)
+        user = os.getenv("SMTP_USERNAME")
+        pwd  = os.getenv("SMTP_PASSWORD")
+        if not user or not pwd:
+            raise RuntimeError("SMTP_USERNAME / SMTP_PASSWORD not set (use GitHub Secrets).")
+        send_email_ipower(subj, html, to_email, from_email, host, port, user, pwd)
+    else:
+        raise RuntimeError(f"Unknown email provider: {provider}")
+
+    print("Email sent via", provider, "Entries:", len(best))
+
+
+
 
 if __name__ == "__main__":
     main()
