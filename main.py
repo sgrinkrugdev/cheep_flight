@@ -302,29 +302,34 @@ def send_email_sendgrid(subject: str, html: str, to_email: str, from_email: str)
         raise RuntimeError(f"SendGrid error: {r.status_code} {r.text}")
 
 def build_daily_digest(best, cfg):
-    """Compact digest: bold header + two segment lines + per-result footer with search params."""
-    # -------- helpers --------
-    def _parse(dt):
-        if not dt: return None
-        try: return datetime.fromisoformat(dt.replace("Z", "+00:00"))
-        except Exception: return None
+    """
+    Compact digest email:
+      Bold header per result:
+        "<DEP> to <ARR> $<PRICE> <CUR> <DEPART> – <RETURN>, Total Travel Time X hr Y min"
+        (uses the MAX of outbound/return itinerary durations; if only one direction exists, label 'Max Travel Time')
+      Then one line per direction with airline, flight number, local times (+1), itinerary duration, route, stops.
+      Per-result footer shows Stops/Max Flight Duration and the searched window.
+      Also prints 'no flights found' blocks for any route/duration with zero results.
+    """
+    # ---------- helpers ----------
+    def _parse_dt(dt):
+        if not dt:
+            return None
+        try:
+            return datetime.fromisoformat(dt.replace("Z", "+00:00"))
+        except Exception:
+            return None
 
-    def _day(dt):   # "4 Dec"
+    def _day_label(dt):       # "4 Dec"
         return dt.strftime("%-d %b") if dt else ""
 
-    def _time(dt):  # "8:30 PM"
+    def _time_label(dt):      # "8:30 PM"
         return dt.strftime("%-I:%M %p") if dt else ""
 
-    def _dur_minutes(dep, arr):
-        if not dep or not arr: return 0
-        return int((arr - dep).total_seconds() // 60)
-
-    def _dur_label(mins):  # "38 hr 20 min"
-        h, m = mins // 60, mins % 60
-        return (f"{h} hr {m} min" if h and m else f"{h} hr" if h else f"{m} min")
-
-    def _next_day(dep, arr):
-        return "+1" if (dep and arr and arr.date() > dep.date()) else ""
+    def _next_day(dep, arr):  # "+1" if arrival date > departure date
+        if not dep or not arr:
+            return ""
+        return "+1" if arr.date() > dep.date() else ""
 
     def _stops_label(n):
         return "Nonstop" if n <= 0 else ("1 stop" if n == 1 else f"{n} stops")
@@ -338,82 +343,162 @@ def build_daily_digest(best, cfg):
         except Exception:
             return f"{val} {curr}".strip()
 
-    # -------- body --------
+    def _parse_iso8601_duration(dur_str):
+        """
+        Parse ISO-8601 duration like 'PT7H40M' -> minutes (int).
+        """
+        if not dur_str or not dur_str.startswith("P"):
+            return None
+        import re
+        m = re.match(r"^P(?:\d+Y)?(?:\d+M)?(?:\d+W)?(?:\d+D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$", dur_str)
+        if not m:
+            return None
+        h = int(m.group(1) or 0)
+        mins = int(m.group(2) or 0)
+        s = int(m.group(3) or 0)
+        return h * 60 + mins + (1 if s >= 30 else 0)  # round seconds up at 30s
+
+    def _dur_label_mins(mins):
+        h, m = mins // 60, mins % 60
+        if h and m: return f"{h} hr {m} min"
+        if h:       return f"{h} hr"
+        return f"{m} min"
+
+    def _itinerary_minutes(itin, segs):
+        """
+        Prefer itinerary['duration'] (ISO) if present; else compute first dep -> last arr (TZ-aware).
+        """
+        if not segs:
+            return 0
+        if isinstance(itin, dict):
+            mins = _parse_iso8601_duration(itin.get("duration"))
+            if mins is not None:
+                return mins
+        dep_dt = _parse_dt(segs[0].get("departure", {}).get("at", ""))
+        arr_dt = _parse_dt(segs[-1].get("arrival", {}).get("at", ""))
+        if not dep_dt or not arr_dt:
+            return 0
+        return int((arr_dt - dep_dt).total_seconds() // 60)
+
+    # ---------- prep ----------
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
     lines = [f"<h2>Daily Flight Watcher — {now}</h2>"]
 
-    if not best:
-        lines.append("<p>No offers found today.</p>")
-        return "\n".join(lines)
+    # Build quick lookup of found results by (origin, destination, duration_days)
+    found_index = {}
+    for r in best or []:
+        key = (r.get("origin",""), r.get("destination",""), int(r.get("duration_days", 0)))
+        found_index[key] = r
 
-    best = sorted(best, key=lambda x: (x.get("route_name",""), x.get("duration_days",0)))
-
-    # Pull global constraints (for footer display)
+    # Global constraints for footer
     cfg_max_stops = cfg.get("max_stops", None)
     stops_disp = "Any" if cfg_max_stops is None else str(cfg_max_stops)
-    cfg_mfd = cfg.get("max_flight_duration", None)
-    mfd_disp = "No limit" if cfg_mfd is None else f"{int(cfg_mfd)} hours"
+    mfd_cfg = cfg.get("max_flight_duration", None)
+    mfd_disp = "No limit" if mfd_cfg is None else (f"{int(mfd_cfg)} hours" if float(mfd_cfg).is_integer() else f"{float(mfd_cfg):.1f} hours")
 
-    for r in best:
+    # 1) Render all FOUND winners
+    for r in sorted(best or [], key=lambda x: (x.get("route_name",""), x.get("duration_days", 0))):
         outs = r.get("outbound_segments", [])
         rets = r.get("return_segments", [])
         o0, oN = _first(outs), _last(outs)
         r0, rN = _first(rets), _last(rets)
 
-        # Times & durations
-        o_dep_dt, o_arr_dt = _parse(o0.get("dep_at","")), _parse(oN.get("arr_at",""))
-        r_dep_dt, r_arr_dt = _parse(r0.get("dep_at","")), _parse(rN.get("arr_at",""))
-        out_mins = _dur_minutes(o_dep_dt, o_arr_dt)
-        ret_mins = _dur_minutes(r_dep_dt, r_arr_dt)
-        total_mins = out_mins + ret_mins
+        # Compute itinerary durations (minutes) correctly
+        out_mins = _itinerary_minutes({"duration": r.get("out_duration_iso")}, outs) if "out_duration_iso" in r else _itinerary_minutes(None, outs)
+        ret_mins = _itinerary_minutes({"duration": r.get("ret_duration_iso")}, rets) if "ret_duration_iso" in r else _itinerary_minutes(None, rets)
 
-        # Header (bold)
-        dep_air = o0.get("dep_airport","") or r0.get("dep_airport","")
-        arr_air = oN.get("arr_airport","")  or rN.get("arr_airport","")
+        # Choose the header number: max of the legs that exist
+        legs = [m for m in (out_mins, ret_mins) if m > 0]
+        if legs:
+            header_label = "Total Travel Time" if (out_mins and ret_mins) else "Max Travel Time"
+            header_time = _dur_label_mins(max(legs))
+            header_tail = f", {header_label} {header_time}"
+        else:
+            header_tail = ""  # no legs? unusual, but avoid adding text
+
+        # Airports, price, window
+        dep_air = o0.get("dep_airport","") or r0.get("dep_airport","") or r.get("origin","")
+        arr_air = oN.get("arr_airport","")  or rN.get("arr_airport","")  or r.get("destination","")
         price   = _price_fmt(r.get("price",""), r.get("currency",""))
         start_d = r.get("depart_date","")
         end_d   = r.get("return_date","")
-        header  = (
-            f"<b>{dep_air} to {arr_air} {price} {start_d} – {end_d}, "
-            f"Total Flight Time {_dur_label(total_mins)}</b>"
-        )
-        lines.append(f"<div>{header}</div>")
 
-        # Outbound (single line)
+        # Bold header
+        header = f"<b>{dep_air} to {arr_air} {price} {start_d} – {end_d}{header_tail}</b>"
+        block = [f"<div>{header}</div>"]
+
+        # Parse times for display lines
+        o_dep_dt = _parse_dt(o0.get("departure", {}).get("at") if "departure" in o0 else o0.get("dep_at",""))
+        o_arr_dt = _parse_dt(oN.get("arrival", {}).get("at")   if "arrival"   in oN else oN.get("arr_at",""))
+        r_dep_dt = _parse_dt(r0.get("departure", {}).get("at") if "departure" in r0 else r0.get("dep_at",""))
+        r_arr_dt = _parse_dt(rN.get("arrival", {}).get("at")   if "arrival"   in rN else rN.get("arr_at",""))
+
+        # Outbound line
         if outs:
             o_line = (
                 f"{o0.get('carrier_name','')} {o0.get('flight_number','')} "
-                f"{_day(o_dep_dt)} · {_time(o_dep_dt)}–{_time(o_arr_dt)}{_next_day(o_dep_dt,o_arr_dt)}"
-                f"&nbsp;&nbsp; {_dur_label(out_mins)} "
+                f"{_day_label(o_dep_dt)} · {_time_label(o_dep_dt)}–{_time_label(o_arr_dt)}{_next_day(o_dep_dt,o_arr_dt)}"
+                f"&nbsp;&nbsp; {_dur_label_mins(out_mins)} "
                 f"{o0.get('dep_airport','')}–{oN.get('arr_airport','')}"
                 f"&nbsp;&nbsp; {_stops_label(len(outs)-1)}"
             )
-            lines.append(f"<div>{o_line}</div>")
+            block.append(f"<div>{o_line}</div>")
 
-        # Return (single line)
+        # Return line
         if rets:
             r_line = (
                 f"{r0.get('carrier_name','')} {r0.get('flight_number','')} "
-                f"{_day(r_dep_dt)} · {_time(r_dep_dt)}–{_time(r_arr_dt)}{_next_day(r_dep_dt,r_arr_dt)}"
-                f"&nbsp;&nbsp; {_dur_label(ret_mins)} "
+                f"{_day_label(r_dep_dt)} · {_time_label(r_dep_dt)}–{_time_label(r_arr_dt)}{_next_day(r_dep_dt,r_arr_dt)}"
+                f"&nbsp;&nbsp; {_dur_label_mins(ret_mins)} "
                 f"{r0.get('dep_airport','')}–{rN.get('arr_airport','')}"
                 f"&nbsp;&nbsp; {_stops_label(len(rets)-1)}"
             )
-            lines.append(f"<div>{r_line}</div>")
+            block.append(f"<div>{r_line}</div>")
 
-        # --- Footer with key search parameters ---
+        # Per-result footer
         trip_dur = r.get("duration_days", "")
         footer1 = f"Stops: {stops_disp}, Max Flight Duration: {mfd_disp}"
-        footer2 = (
-            f"Flying from {dep_air} to {arr_air} for {trip_dur} days "
-            f"between {start_d} and {end_d}"
-        )
-        lines.append(f"<div style='color:#555'>{footer1}</div>")
-        lines.append(f"<div style='color:#555'>{footer2}</div>")
+        footer2 = f"Flying from {dep_air} to {arr_air} for {trip_dur} days between {start_d} and {end_d}"
+        block.append(f"<div style='color:#555'>{footer1}</div>")
+        block.append(f"<div style='color:#555'>{footer2}</div>")
+        block.append("<br>")
 
-        lines.append("<br>")  # spacing between results
+        lines.append("\n".join(block))
+
+    # 2) Add "no flights found" blocks for any route/duration with zero results
+    #    (Earliest candidate window shown as example)
+    for route in cfg.get("routes", []):
+        origin = route["origin"]
+        dest = route["destination"]
+        start_cfg = route.get("start_date")
+        durations = route.get("durations", [10])
+
+        for dur in durations:
+            key = (origin, dest, int(dur))
+            if key in found_index:
+                continue  # this route/duration had a winner
+
+            # earliest window label: start_date .. start_date + duration
+            try:
+                s0 = datetime.fromisoformat(str(start_cfg))
+                start_label = s0.date().isoformat()
+                end_window = (s0 + timedelta(days=int(dur))).date().isoformat()
+            except Exception:
+                start_label = str(start_cfg)
+                end_window = str(start_cfg)
+
+            footer1 = f"Stops: {stops_disp}, Max Flight Duration: {mfd_disp}"
+            footer2 = f"Flying from {origin} to {dest} for {int(dur)} days between {start_label} and {end_window}"
+            nores = (
+                f"<div><b>{origin} to {dest} no flights found with these search parameters:</b></div>"
+                f"<div style='color:#555'>{footer1}</div>"
+                f"<div style='color:#555'>{footer2}</div>"
+                f"<br>"
+            )
+            lines.append(nores)
 
     return "\n".join(lines)
+
 
 
 
