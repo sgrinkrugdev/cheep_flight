@@ -67,8 +67,8 @@ def summarize_offer(offer: dict, carriers: Dict[str, str]) -> Dict[str, Any]:
     def map_segments(itin):
         segs_out = []
         for seg in safe_get(itin, ["segments"], []) or []:
-            cc = str(seg.get("carrierCode", "") or "")
-            no = str(seg.get("number", "") or "")
+            cc  = str(seg.get("carrierCode", "") or "")
+            no  = str(seg.get("number", "") or "")
             dep = seg.get("departure", {}) or {}
             arr = seg.get("arrival", {}) or {}
             segs_out.append({
@@ -85,21 +85,35 @@ def summarize_offer(offer: dict, carriers: Dict[str, str]) -> Dict[str, Any]:
     outbound_segments = map_segments(itin0)
     return_segments  = map_segments(itin1)
 
-    # First-segment timestamps for quick summary fields (kept for subject/overview)
     out0 = outbound_segments[0] if outbound_segments else {}
+    outN = outbound_segments[-1] if outbound_segments else {}
     ret0 = return_segments[0]  if return_segments  else {}
+    retN = return_segments[-1] if return_segments  else {}
 
     return {
         "price": price,
         "currency": currency,
         "airline": validating,  # validating airline code
+
+        # segments
         "outbound_segments": outbound_segments,
         "return_segments": return_segments,
+
+        # quick fields used elsewhere
         "out_depart": out0.get("dep_at", ""),
         "ret_depart": ret0.get("dep_at", ""),
+        "out_arrive": outN.get("arr_at", ""),
+        "ret_arrive": retN.get("arr_at", ""),
         "stops_out": max(0, len(outbound_segments) - 1),
         "stops_ret": max(0, len(return_segments) - 1),
+
+        # new fields you need for the CSV
+        "out_flight": out0.get("flight_number", ""),
+        "ret_flight": ret0.get("flight_number", ""),
+        "airline_name_out": out0.get("carrier_name", ""),
+        "airline_name_ret": ret0.get("carrier_name", ""),
     }
+
 
 
 def search_cheapest_for_window(token: str, origin: str, dest: str, depart: date, duration: int, 
