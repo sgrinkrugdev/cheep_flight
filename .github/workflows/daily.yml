@@ -63,6 +63,10 @@ jobs:
           AMADEUS_API_SECRET: ${{ secrets.AMADEUS_API_SECRET }}
           FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
           TO_EMAIL: ${{ secrets.TO_EMAIL }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
         run: python main.py
       - name: Commit CSV (append history)
         if: always()
