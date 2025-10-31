@@ -57,7 +57,7 @@ jobs:
           FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
           TO_EMAIL: ${{ secrets.TO_EMAIL }}
         run: python main.py
-              - name: Commit CSV (append history)
+      - name: Commit CSV (append history)
         if: always()
         run: |
           git config user.name  "github-actions"
