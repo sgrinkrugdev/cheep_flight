@@ -63,4 +63,36 @@ jobs:
           # 2) Now safely rebase on latest remote and push
           git pull --rebase origin "${GITHUB_REF_NAME}"
           git push origin HEAD:"${GITHUB_REF_NAME}"
+      
+      - name: Install rclone
+        if: always()
+        run: |
+          curl -fsSL https://rclone.org/install.sh | sudo bash
+
+      - name: Configure rclone for Google Drive
+        if: always()
+        env:
+          GDRIVE_SA_JSON: ${{ secrets.GDRIVE_SA_JSON }}
+          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+        run: |
+          mkdir -p ~/.config/rclone
+          echo "$GDRIVE_SA_JSON" > sa.json
+          cat > ~/.config/rclone/rclone.conf <<'RC'
+          [gdrive]
+          type = drive
+          scope = drive
+          service_account_file = sa.json
+          root_folder_id = ${GDRIVE_FOLDER_ID}
+          RC
+
+      - name: Upload CSV to Google Drive (rolling copy)
+        if: always()
+        run: |
+          rclone copyto cheapest_log.csv gdrive:cheapest_log.csv -v
+
+      - name: Upload timestamped backup to Google Drive
+        if: always()
+        run: |
+          ts=$(date -u +'%Y-%m-%d_%H-%M-%S')
+          rclone copyto cheapest_log.csv gdrive:cheapest_log_${ts}.csv -v
 
