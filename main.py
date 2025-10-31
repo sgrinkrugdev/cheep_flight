@@ -267,15 +267,65 @@ def send_email_sendgrid(subject: str, html: str, to_email: str, from_email: str)
         raise RuntimeError(f"SendGrid error: {r.status_code} {r.text}")
 
 def build_daily_digest(best, cfg):
-    """HTML email body with per-segment details (airline name, flight number, dep/arr times)."""
-    def fmt_dt(dt_iso: str) -> str:
-        # 2025-01-01T12:01:00[Z] -> 'Jan 01, 2025 12:01 PM'
+    """
+    Google-Flights-style HTML:
+    <Route> (e.g., IAD to GVA)
+    <Carrier> · Round trip · <Cabin> · <Adults>
+    <Outbound line>
+    <Return line>
+    """
+    # ---------- helpers ----------
+    def _parse(dt):
+        # '2025-03-06T17:30:00Z' or with offset
+        if not dt:
+            return None
         try:
-            s = (dt_iso or "").replace("Z", "+00:00")
-            return datetime.fromisoformat(s).strftime("%b %d, %Y %I:%M %p")
+            s = dt.replace("Z", "+00:00")
+            return datetime.fromisoformat(s)
         except Exception:
-            return dt_iso or ""
+            return None
 
+    def _date_label(dt):
+        # "Wed, Mar 6 2024"
+        return dt.strftime("%a, %b %-d %Y") if dt else ""
+
+    def _day_label(dt):
+        # "6 Mar"
+        return dt.strftime("%-d %b") if dt else ""
+
+    def _time_label(dt):
+        # "5:30 PM"
+        return dt.strftime("%-I:%M %p") if dt else ""
+
+    def _dur_label(dep, arr):
+        if not dep or not arr:
+            return ""
+        delta = arr - dep
+        mins = int(delta.total_seconds() // 60)
+        h, m = mins // 60, mins % 60
+        if h and m:
+            return f"{h} hr {m} min"
+        elif h:
+            return f"{h} hr"
+        else:
+            return f"{m} min"
+
+    def _next_day_suffix(dep, arr):
+        if not dep or not arr:
+            return ""
+        return "+1" if arr.date() > dep.date() else ""
+
+    def _stops_label(n):
+        if n <= 0:
+            return "Nonstop"
+        return f"{n} stop" if n == 1 else f"{n} stops"
+
+    def _first(seg_list):
+        return seg_list[0] if seg_list else {}
+    def _last(seg_list):
+        return seg_list[-1] if seg_list else {}
+
+    # ---------- body ----------
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
     lines = [f"<h2>Daily Flight Watcher — {now}</h2>"]
 
@@ -283,68 +333,74 @@ def build_daily_digest(best, cfg):
         lines.append("<p>No offers found today.</p>")
         return "\n".join(lines)
 
-    lines.append("<ul>")
-    # Sort by route then duration for a tidy email
-    for r in sorted(best, key=lambda x: (x.get('route_name',''), x.get('duration_days', 0))):
-        price = f"{r.get('price','')} {r.get('currency','')}".strip()
-        route = r.get('route_name', '')
-        dur   = r.get('duration_days', '')
-        dep   = r.get('depart_date', '')
-        ret   = r.get('return_date', '')
-        stops_out = r.get('stops_out', 0)
-        stops_ret = r.get('stops_ret', 0)
+    # Sort for consistent layout
+    best = sorted(best, key=lambda x: (x.get("route_name",""), x.get("duration_days",0)))
 
+    lines.append("<ul>")
+    for r in best:
+        outs = r.get("outbound_segments", [])
+        rets = r.get("return_segments", [])
+        o0, oN = _first(outs), _last(outs)
+        r0, rN = _first(rets), _last(rets)
+
+        # Parse datetimes
+        o_dep_dt, o_arr_dt = _parse(o0.get("dep_at","")), _parse(oN.get("arr_at",""))
+        r_dep_dt, r_arr_dt = _parse(r0.get("dep_at","")), _parse(rN.get("arr_at",""))
+
+        # Header line (route + price)
+        route_hdr = f"{o0.get('dep_airport','')} to {oN.get('arr_airport','')}" if outs else r.get("route_name","")
+        price_str = f"{r.get('price','')} {r.get('currency','')}".strip()
         lines.append(
-            f"<li><b>{route}</b> — {dur} days — "
-            f"<b>{price}</b> "
-            f"(stops out/ret: {stops_out}/{stops_ret})<br>"
-            f"Window: depart <b>{dep}</b>, return <b>{ret}</b><br>"
+            "<li>"
+            f"<h3 style='margin:6px 0'>{route_hdr}</h3>"
+            f"<div style='margin:2px 0 8px 0'><b>{price_str}</b></div>"
         )
 
-        # Outbound segments
-        outs = r.get("outbound_segments", [])
+        # Subhead like Google Flights
+        carrier_hdr = (o0.get("carrier_name") or r.get("airline","")).strip()
+        cabin = (cfg.get("cabin") or "Economy")
+        adults = int(cfg.get("adults", 1))
+        lines.append(
+            f"<div style='color:#555;margin-bottom:6px'>{carrier_hdr} · Round trip · {cabin} · {adults}</div>"
+        )
+
+        # Outbound line
         if outs:
-            lines.append("<div><u>Outbound</u><ul>")
-            for seg in outs:
-                flight = seg.get("flight_number", "")
-                airline = seg.get("carrier_name", seg.get("carrier_code",""))
-                dep_air = seg.get("dep_airport","")
-                arr_air = seg.get("arr_airport","")
-                dep_at  = fmt_dt(seg.get("dep_at",""))
-                arr_at  = fmt_dt(seg.get("arr_at",""))
-                lines.append(
-                    "<li>"
-                    f"Flight <b>{flight}</b> {airline} — "
-                    f"Departs <b>{dep_air}</b> {dep_at} — "
-                    f"Arrives <b>{arr_air}</b> {arr_at}"
-                    "</li>"
-                )
-            lines.append("</ul></div>")
+            o_day = _day_label(o_dep_dt)
+            o_time = f"{_time_label(o_dep_dt)}–{_time_label(o_arr_dt)}{_next_day_suffix(o_dep_dt,o_arr_dt)}"
+            o_dur = _dur_label(o_dep_dt, o_arr_dt)
+            o_route = f"{o0.get('dep_airport','')}–{oN.get('arr_airport','')}"
+            o_stops = _stops_label(len(outs)-1)
+            o_flight = o0.get("flight_number","")
+            lines.append(
+                "<div style='margin:3px 0'>"
+                f"<b>{o_day}</b> · {o_time} &nbsp;&nbsp; {o_dur}<br>"
+                f"{o_route} &nbsp;&nbsp; {o_stops}<br>"
+                f"{o0.get('carrier_name','')} {o_flight}"
+                "</div>"
+            )
 
-        # Return segments
-        rets = r.get("return_segments", [])
+        # Return line
         if rets:
-            lines.append("<div><u>Return</u><ul>")
-            for seg in rets:
-                flight = seg.get("flight_number", "")
-                airline = seg.get("carrier_name", seg.get("carrier_code",""))
-                dep_air = seg.get("dep_airport","")
-                arr_air = seg.get("arr_airport","")
-                dep_at  = fmt_dt(seg.get("dep_at",""))
-                arr_at  = fmt_dt(seg.get("arr_at",""))
-                lines.append(
-                    "<li>"
-                    f"Flight <b>{flight}</b> {airline} — "
-                    f"Departs <b>{dep_air}</b> {dep_at} — "
-                    f"Arrives <b>{arr_air}</b> {arr_at}"
-                    "</li>"
-                )
-            lines.append("</ul></div>")
+            r_day = _day_label(r_dep_dt)
+            r_time = f"{_time_label(r_dep_dt)}–{_time_label(r_arr_dt)}{_next_day_suffix(r_dep_dt,r_arr_dt)}"
+            r_dur = _dur_label(r_dep_dt, r_arr_dt)
+            r_route = f"{r0.get('dep_airport','')}–{rN.get('arr_airport','')}"
+            r_stops = _stops_label(len(rets)-1)
+            r_flight = r0.get("flight_number","")
+            lines.append(
+                "<div style='margin:6px 0 10px 0'>"
+                f"<b>{r_day}</b> · {r_time} &nbsp;&nbsp; {r_dur}<br>"
+                f"{r_route} &nbsp;&nbsp; {r_stops}<br>"
+                f"{r0.get('carrier_name','')} {r_flight}"
+                "</div>"
+            )
 
-        lines.append("</li>")  # end route item
+        lines.append("</li>")
 
     lines.append("</ul>")
     return "\n".join(lines)
+
 
 
 def main():
