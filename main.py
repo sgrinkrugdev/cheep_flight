@@ -103,25 +103,33 @@ def summarize_offer(offer: dict, carriers: Dict[str, str]) -> Dict[str, Any]:
 
 
 def search_cheapest_for_window(token: str, origin: str, dest: str, depart: date, duration: int, 
-                               adults: int, cabin: Optional[str], currency: str, max_stops: Optional[int]) -> Optional[Dict[str,Any]]:
+                               adults: int, cabin: Optional[str], currency: str,
+                               max_stops: Optional[int], max_flight_duration_hours: Optional[int]) -> Optional[Dict[str,Any]]:
+    """
+    Query Amadeus for a single (origin, dest, depart, return) window and return the cheapest offer
+    after applying:
+      - max_stops: maximum stops per direction (itinerary), if provided
+      - max_flight_duration_hours: maximum total air time per direction (itinerary), if provided
+        (i.e., outbound itinerary duration <= threshold AND return itinerary duration <= threshold)
+    """
     from time import sleep
 
     return_date = depart + timedelta(days=duration)
     params = {
         "originLocationCode": origin,
         "destinationLocationCode": dest,
-        "departureDate": iso(depart),
-        "returnDate": iso(return_date),
+        "departureDate": depart.isoformat(),
+        "returnDate": return_date.isoformat(),
         "adults": str(adults),
         "currencyCode": currency,
-        "max": "20"  # keep; 'sort' is NOT supported on some test endpoints
+        "max": "20"  # keep; don't use 'sort' on test env
     }
     if cabin:
         params["travelClass"] = cabin  # ECONOMY, PREMIUM_ECONOMY, BUSINESS, FIRST
 
     headers = {"Authorization": f"Bearer {token}"}
 
-    # simple retry (once) for 429
+    # --- simple retry for transient 429s ---
     for attempt in (1, 2):
         try:
             resp = requests.get(AMAD_SEARCH_URL, headers=headers, params=params, timeout=30)
@@ -135,53 +143,76 @@ def search_cheapest_for_window(token: str, origin: str, dest: str, depart: date,
             continue
 
         if resp.status_code >= 400:
-            # show first part of body for diagnosis
-            body = resp.text[:400].replace("\n", " ")
-            print(f"[debug] {origin}->{dest} {depart} dur={duration}: HTTP {resp.status_code} {body}")
+            snippet = resp.text[:400].replace("\n", " ")
+            print(f"[debug] {origin}->{dest} {depart} dur={duration}: HTTP {resp.status_code} {snippet}")
             return None
 
         data = resp.json()
+        offers = data.get("data", []) or []
         carriers = data.get("dictionaries", {}).get("carriers", {})
-        offers = data.get("data", [])
-        pre = len(offers)
+
         if not offers:
             print(f"[debug] {origin}->{dest} {depart} dur={duration}: offers=0")
             return None
 
-        # Filter by stops if requested
-        if max_stops is not None:
-            filtered = []
-            for o in offers:
-                it0 = safe_get(o, ["itineraries", 0, "segments"], [])
-                it1 = safe_get(o, ["itineraries", 1, "segments"], [])
-                stops0 = max(0, len(it0) - 1)
-                stops1 = max(0, len(it1) - 1)
-                if stops0 <= max_stops and stops1 <= max_stops:
-                    filtered.append(o)
-            offers = filtered or offers
+        # --- helpers for filtering ---
+        def itinerary_minutes(itin: dict) -> int:
+            segs = itin.get("segments", []) or []
+            if not segs:
+                return 0
+            def _p(s: str) -> datetime:
+                return datetime.fromisoformat(s.replace("Z", "+00:00"))
+            dep_ts = _p(segs[0]["departure"]["at"])
+            arr_ts = _p(segs[-1]["arrival"]["at"])
+            return int((arr_ts - dep_ts).total_seconds() // 60)
 
-        post = len(offers)
-        cheapest = pick_cheapest_offer(offers)
+        filtered = []
+        for o in offers:
+            it_out = safe_get(o, ["itineraries", 0], {}) or {}
+            it_ret = safe_get(o, ["itineraries", 1], {}) or {}
+            seg_out = it_out.get("segments", []) or []
+            seg_ret = it_ret.get("segments", []) or []
+
+            # max_stops filter (per direction)
+            if max_stops is not None:
+                stops_out = max(0, len(seg_out) - 1)
+                stops_ret = max(0, len(seg_ret) - 1)
+                if stops_out > max_stops or stops_ret > max_stops:
+                    continue
+
+            # max_flight_duration_hours filter (per direction)
+            if max_flight_duration_hours is not None:
+                limit_mins = int(max_flight_duration_hours) * 60
+                out_mins = itinerary_minutes(it_out)
+                ret_mins = itinerary_minutes(it_ret)
+                # Enforce per-direction cap (both must comply)
+                if out_mins > limit_mins or ret_mins > limit_mins:
+                    continue
+
+            filtered.append(o)
+
+        # If all offers were filtered out, return None (strict enforcement)
+        if not filtered:
+            print(f"[debug] {origin}->{dest} {depart} dur={duration}: offers={len(offers)} filtered=0")
+            return None
+
+        cheapest = pick_cheapest_offer(filtered)
         if not cheapest:
-            print(f"[debug] {origin}->{dest} {depart} dur={duration}: offers_pre={pre} offers_post={post} cheapest=n/a")
+            print(f"[debug] {origin}->{dest} {depart} dur={duration}: cheapest=n/a after filtering")
             return None
 
         summary = summarize_offer(cheapest, carriers)
-
-        print(f"[debug] {origin}->{dest} {depart} dur={duration}: offers_pre={pre} offers_post={post} cheapest={summary['price']} {summary['currency']}")
-
         summary.update({
             "origin": origin,
             "destination": dest,
-            "depart_date": iso(depart),
-            "return_date": iso(return_date),
+            "depart_date": depart.isoformat(),
+            "return_date": return_date.isoformat(),
         })
         return summary
 
-    # fell through retries
+    # Retries exhausted
     print(f"[debug] {origin}->{dest} {depart} dur={duration}: 429 persisted, skipping")
     return None
-
 
 
 def run_search(cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -194,6 +225,9 @@ def run_search(cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
     cabin = cfg.get("cabin")
     max_stops = cfg.get("max_stops", None)
     max_stops = int(max_stops) if max_stops is not None else None
+    max_flight_duration = cfg.get("max_flight_duration", None)
+    max_flight_duration = int(max_flight_duration) if max_flight_duration is not None else None
+
 
     results = []
     for route in cfg["routes"]:
@@ -212,8 +246,9 @@ def run_search(cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
             for d0 in daterange(start, end - timedelta(days=dur)):
                 try:
                     found = search_cheapest_for_window(
-                        token, origin, dest, d0, dur, adults, cabin, currency, max_stops
+                        token, origin, dest, d0, dur, adults, cabin, currency, max_stops, max_flight_duration
                     )
+
                 except Exception:
                     traceback.print_exc()
                     found = None
@@ -267,50 +302,34 @@ def send_email_sendgrid(subject: str, html: str, to_email: str, from_email: str)
         raise RuntimeError(f"SendGrid error: {r.status_code} {r.text}")
 
 def build_daily_digest(best, cfg):
-    """
-    Compact, Google-Flights-style email.
-    For each winner:
-      1) "<DEP> to <ARR> <PRICE> <CARRIER> · Round trip · <CABIN> · <ADULTS>"
-      2) "<AIRLINE> <FLIGHT> <DAY MON> · <HH:MM AM–HH:MM PM(+1)>    <DUR> <DEP–ARR>    <STOPS>"
-      3) "<AIRLINE> <FLIGHT> <DAY MON> · <HH:MM AM–HH:MM PM(+1)>    <DUR> <DEP–ARR>    <STOPS>"
-    """
-    # -------- helpers --------
+    """Compact digest: bold header + two segment lines; shows total flight time."""
     def _parse(dt):
-        if not dt:
-            return None
-        try:
-            return datetime.fromisoformat(dt.replace("Z", "+00:00"))
-        except Exception:
-            return None
+        if not dt: return None
+        try: return datetime.fromisoformat(dt.replace("Z", "+00:00"))
+        except Exception: return None
 
-    def _day_label(dt):   # "4 Dec"
+    def _day(dt):  # "4 Dec"
         return dt.strftime("%-d %b") if dt else ""
 
-    def _time_label(dt):  # "8:30 PM"
+    def _time(dt):  # "8:30 PM"
         return dt.strftime("%-I:%M %p") if dt else ""
 
-    def _dur_label(dep, arr):  # "38 hr 20 min"
-        if not dep or not arr:
-            return ""
-        mins = int((arr - dep).total_seconds() // 60)
+    def _dur(dep, arr):  # minutes
+        if not dep or not arr: return 0
+        return int((arr - dep).total_seconds() // 60)
+
+    def _dur_label(mins):  # "38 hr 20 min"
         h, m = mins // 60, mins % 60
-        if h and m: return f"{h} hr {m} min"
-        if h:       return f"{h} hr"
-        return f"{m} min"
+        return (f"{h} hr {m} min" if h and m else f"{h} hr" if h else f"{m} min")
 
-    def _next_day_suffix(dep, arr):  # "+1" if next-day arrival
-        if not dep or not arr:
-            return ""
-        return "+1" if arr.date() > dep.date() else ""
+    def _next_day(dep, arr):
+        return "+1" if (dep and arr and arr.date() > dep.date()) else ""
 
-    def _stops_label(n):
-        if n <= 0: return "Nonstop"
-        return "1 stop" if n == 1 else f"{n} stops"
+    def _stops(n): return "Nonstop" if n <= 0 else ("1 stop" if n == 1 else f"{n} stops")
 
     def _first(segs): return segs[0] if segs else {}
     def _last(segs):  return segs[-1] if segs else {}
 
-    # -------- body --------
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
     lines = [f"<h2>Daily Flight Watcher — {now}</h2>"]
 
@@ -330,44 +349,50 @@ def build_daily_digest(best, cfg):
         o_dep_dt, o_arr_dt = _parse(o0.get("dep_at","")), _parse(oN.get("arr_at",""))
         r_dep_dt, r_arr_dt = _parse(r0.get("dep_at","")), _parse(rN.get("arr_at",""))
 
-        # Header line
-        price = f"{r.get('price','')} {r.get('currency','')}".strip()
-        carrier_hdr = (o0.get("carrier_name") or r.get("airline","")).strip()
-        cabin = (cfg.get("cabin") or "ECONOMY")
-        adults = int(cfg.get("adults", 1))
+        # Durations
+        out_mins = _dur(o_dep_dt, o_arr_dt)
+        ret_mins = _dur(r_dep_dt, r_arr_dt)
+        total_mins = out_mins + ret_mins
+
+        # Bold header line
         dep_air = o0.get("dep_airport","") or r0.get("dep_airport","")
         arr_air = oN.get("arr_airport","")  or rN.get("arr_airport","")
-        header = f"{dep_air} to {arr_air} {price} {carrier_hdr} · Round trip · {cabin} · {adults}"
-
-        # Outbound single line
-        o_line = ""
-        if outs:
-            o_flight = o0.get("flight_number","")
-            o_day    = _day_label(o_dep_dt)
-            o_time   = f"{_time_label(o_dep_dt)}–{_time_label(o_arr_dt)}{_next_day_suffix(o_dep_dt,o_arr_dt)}"
-            o_dur    = _dur_label(o_dep_dt, o_arr_dt)
-            o_route  = f"{o0.get('dep_airport','')}–{oN.get('arr_airport','')}"
-            o_stops  = _stops_label(len(outs)-1)
-            o_line   = f"{o0.get('carrier_name','')} {o_flight} {o_day} · {o_time} &nbsp;&nbsp; {o_dur} {o_route} &nbsp;&nbsp; {o_stops}"
-
-        # Return single line
-        r_line = ""
-        if rets:
-            r_flight = r0.get("flight_number","")
-            r_day    = _day_label(r_dep_dt)
-            r_time   = f"{_time_label(r_dep_dt)}–{_time_label(r_arr_dt)}{_next_day_suffix(r_dep_dt,r_arr_dt)}"
-            r_dur    = _dur_label(r_dep_dt, r_arr_dt)
-            r_route  = f"{r0.get('dep_airport','')}–{rN.get('arr_airport','')}"
-            r_stops  = _stops_label(len(rets)-1)
-            r_line   = f"{r0.get('carrier_name','')} {r_flight} {r_day} · {r_time} &nbsp;&nbsp; {r_dur} {r_route} &nbsp;&nbsp; {r_stops}"
-
-        # Append as compact block (3 lines total)
+        price   = r.get("price","")
+        curr    = r.get("currency","")
+        start_d = r.get("depart_date","")
+        end_d   = r.get("return_date","")
+        header  = (
+            f"<b>{dep_air} to {arr_air} ${price} {curr} "
+            f"{start_d} – {end_d}, Total Flight Time {_dur_label(total_mins)}</b>"
+        )
         lines.append(f"<div>{header}</div>")
-        if o_line: lines.append(f"<div>{o_line}</div>")
-        if r_line: lines.append(f"<div>{r_line}</div>")
-        lines.append("<br>")  # spacing between results
+
+        # Outbound line
+        if outs:
+            o_line = (
+                f"{o0.get('carrier_name','')} {o0.get('flight_number','')} "
+                f"{_day(o_dep_dt)} · {_time(o_dep_dt)}–{_time(o_arr_dt)}{_next_day(o_dep_dt,o_arr_dt)}"
+                f"&nbsp;&nbsp; {_dur_label(out_mins)} "
+                f"{o0.get('dep_airport','')}–{oN.get('arr_airport','')}"
+                f"&nbsp;&nbsp; {_stops(len(outs)-1)}"
+            )
+            lines.append(f"<div>{o_line}</div>")
+
+        # Return line
+        if rets:
+            r_line = (
+                f"{r0.get('carrier_name','')} {r0.get('flight_number','')} "
+                f"{_day(r_dep_dt)} · {_time(r_dep_dt)}–{_time(r_arr_dt)}{_next_day(r_dep_dt,r_arr_dt)}"
+                f"&nbsp;&nbsp; {_dur_label(ret_mins)} "
+                f"{r0.get('dep_airport','')}–{rN.get('arr_airport','')}"
+                f"&nbsp;&nbsp; {_stops(len(rets)-1)}"
+            )
+            lines.append(f"<div>{r_line}</div>")
+
+        lines.append("<br>")  # spacing
 
     return "\n".join(lines)
+
 
 
 
