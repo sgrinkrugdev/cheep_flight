@@ -2,7 +2,8 @@ timezone: America/New_York
 currency: USD
 adults: 1
 cabin: ECONOMY
-max_stops: null
+max_stops: 1               # already supported; set 0 for nonstop, null for any
+max_flight_duration: 30    # NEW: total air time cap (hours) OUT+RET
 log_csv: cheapest_log.csv
 
 routes:
