@@ -358,21 +358,34 @@ def send_email_ipower(subject: str, html: str, to_email: str, from_email: str,
 
 def build_daily_digest(best, cfg):
     """
-    Email renderer with per-segment durations, per-direction totals, stop counts,
-    and overall Max travel time (max of outbound/return direction totals).
-    Prefers Amadeus-provided ISO8601 durations (itinerary 'duration', segment 'duration')
-    to avoid timezone ambiguity; falls back to datetime math if missing.
+    Renders email:
+      • If results exist for a route+duration: show full details (segments, totals, footer).
+      • If no results for a route+duration: show "No Flights" and the filters footer.
+    Dates in headers are formatted as "DD Mon".
     """
 
-    # -------- duration/time helpers --------
+    from datetime import datetime as _dt, timedelta
+
+    # ---------- helpers ----------
     def _parse_iso(dt_str):
         if not dt_str:
             return None
         s = dt_str.replace("Z", "+00:00")
         try:
-            return datetime.fromisoformat(s)
+            return _dt.fromisoformat(s)
         except Exception:
             return None
+
+    def _fmt_date_short(d_str: str) -> str:
+        # Input "YYYY-MM-DD" (string) -> "DD Mon"
+        try:
+            d = _dt.fromisoformat(str(d_str))
+        except Exception:
+            try:
+                d = _dt.strptime(str(d_str), "%Y-%m-%d")
+            except Exception:
+                return str(d_str)
+        return d.strftime("%d %b")
 
     def _fmt_dt_long(dt_str):
         dt = _parse_iso(dt_str)
@@ -385,38 +398,27 @@ def build_daily_digest(best, cfg):
 
     def _plus_days(a_str, b_str):
         a, b = _parse_iso(a_str), _parse_iso(b_str)
-        if not a or not b:
-            return ""
+        if not a or not b: return ""
         d = (b.date() - a.date()).days
         return f"+{d}" if d > 0 else ""
 
-    def _parse_iso8601_duration(dur: str) -> Optional[timedelta]:
-        """Parse 'PT14H45M' → timedelta; returns None if invalid."""
+    def _parse_iso8601_duration(dur: str):
         if not dur or not isinstance(dur, str) or not dur.startswith("P"):
             return None
-        # very small parser (supports days/hours/minutes)
         days = hours = minutes = 0
         try:
-            # Split date/time parts
-            t = dur
-            date_part, time_part = t, ""
-            if "T" in t:
-                date_part, time_part = t.split("T", 1)
-            # days
+            date_part, time_part = dur, ""
+            if "T" in dur:
+                date_part, time_part = dur.split("T", 1)
             if "D" in date_part:
                 idx = date_part.index("D")
-                num = date_part[1:idx]  # skip 'P'
-                days = int(num or 0)
-            # hours
+                days = int(date_part[1:idx] or 0)
             if "H" in time_part:
-                num = time_part.split("H")[0]
-                num = "".join(ch for ch in num if ch.isdigit())
+                num = "".join(ch for ch in time_part.split("H")[0] if ch.isdigit())
                 hours = int(num or 0)
                 time_part = time_part.split("H", 1)[1]
-            # minutes
             if "M" in time_part:
-                num = time_part.split("M")[0]
-                num = "".join(ch for ch in num if ch.isdigit())
+                num = "".join(ch for ch in time_part.split("M")[0] if ch.isdigit())
                 minutes = int(num or 0)
             return timedelta(days=days, hours=hours, minutes=minutes)
         except Exception:
@@ -424,143 +426,175 @@ def build_daily_digest(best, cfg):
 
     def _dur_td(start_str, end_str):
         a, b = _parse_iso(start_str), _parse_iso(end_str)
-        if not a or not b:
-            return None
+        if not a or not b: return None
         return b - a
 
     def _fmt_td(td):
-        if td is None:
-            return ""
+        if td is None: return ""
         total_mins = int(td.total_seconds() // 60)
         hrs, mins = divmod(total_mins, 60)
-        if hrs and mins:
-            return f"{hrs} hr {mins} min"
-        if hrs:
-            return f"{hrs} hr"
+        if hrs and mins: return f"{hrs} hr {mins} min"
+        if hrs: return f"{hrs} hr"
         return f"{mins} min"
+
+    def _fmt_hours(h):
+        if h is None: return None
+        try:
+            hf = float(h)
+            return f"{int(hf)} hr" if hf.is_integer() else f"{hf:.1f} hr"
+        except Exception:
+            return f"{h} hr"
+
+    # Build a map of found results by (route_name, duration_days)
+    found_map = {}
+    for r in best or []:
+        key = (r.get("route_name", ""), int(r.get("duration_days", 0)))
+        found_map[key] = r
 
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
     lines = [f"<h2>Daily Flight Watcher — {now}</h2>"]
 
-    if not best:
-        lines.append("<p>No offers found today.</p>")
-        return "\n".join(lines)
+    routes = cfg.get("routes", [])
+    # Global defaults
+    g_max_stops = cfg.get("max_stops", None)
+    g_max_stops = int(g_max_stops) if g_max_stops is not None else None
+    g_max_fd = cfg.get("max_flight_duration", None)
+    g_max_fd = float(g_max_fd) if g_max_fd is not None else None
 
-    best_sorted = sorted(best, key=lambda x: (x.get('route_name', ''), x.get('duration_days', 0)))
+    # Iterate in config order to ensure "No Flights" entries are shown too
+    for route in routes:
+        origin = route.get("origin", "")
+        dest   = route.get("destination", "")
+        name   = route.get("name", f"{origin}-{dest}")
 
-    for r in best_sorted:
-        out = r.get("outbound_segments", []) or []
-        ret = r.get("return_segments", []) or []
+        # caps (per-route overrides)
+        cap_stops = route.get("max_stops", g_max_stops)
+        cap_stops = int(cap_stops) if cap_stops is not None else None
+        cap_fd    = route.get("max_flight_duration", g_max_fd)
+        cap_fd    = float(cap_fd) if cap_fd is not None else None
 
-        # Prefer itinerary durations if provided
-        out_total_td = _parse_iso8601_duration(r.get("out_total_duration", "")) or (
-            _dur_td(out[0]["dep_at"], out[-1]["arr_at"]) if out else None
-        )
-        ret_total_td = _parse_iso8601_duration(r.get("ret_total_duration", "")) or (
-            _dur_td(ret[0]["dep_at"], ret[-1]["arr_at"]) if ret else None
-        )
+        # dates/durations from config
+        start_s = str(route.get("start_date", ""))
+        end_s   = str(route.get("end_date", ""))
+        start_fmt = _fmt_date_short(start_s)
+        end_fmt   = _fmt_date_short(end_s)
+        durations = route.get("durations", [10])
 
-        # max travel time across directions
-        max_td = None
-        if out_total_td and ret_total_td:
-            max_td = max(out_total_td, ret_total_td, key=lambda t: t.total_seconds())
-        else:
-            max_td = out_total_td or ret_total_td
+        for dur in durations:
+            key = (name, int(dur))
+            r = found_map.get(key)
 
-        header_bits = [
-            f"{r.get('origin','')} to {r.get('destination','')}",
-            f"${r.get('price', 0):.2f} {r.get('currency','')}",
-            f"{r.get('depart_date','')} – {r.get('return_date','')}",
-        ]
-        if max_td:
-            header_bits.append(f"Max travel time {_fmt_td(max_td)}")
-        lines.append(f"<p><b>{' '.join(header_bits)}</b></p>")
-
-        # -------- Outbound --------
-        stops_out = max(0, len(out) - 1)
-        lines.append(
-            f"<div><i>Outbound</i> "
-            f"{('Travel time ' + _fmt_td(out_total_td)) if out_total_td else ''}"
-            f"{(' ' if out_total_td else '')}{stops_out} stop{'s' if stops_out!=1 else ''}</div>"
-        )
-        if not out:
-            lines.append("<div>— (no outbound segments found)</div>")
-        else:
-            for seg in out:
-                # segment flight time: prefer segment.duration
-                seg_td = _parse_iso8601_duration(seg.get("duration", "")) or _dur_td(seg.get("dep_at",""), seg.get("arr_at",""))
-                dep_fmt = _fmt_dt_long(seg.get("dep_at", ""))
-                arr_fmt = _fmt_dt_long(seg.get("arr_at", ""))
-                plus_txt = _plus_days(seg.get("dep_at",""), seg.get("arr_at",""))
-
-                # carrier/flight label without duplicate code (e.g., avoid "AZ AZ619")
-                carrier_name = (seg.get("carrier_name") or "").strip()
-                carrier_code = (seg.get("carrier_code") or "").strip()
-                flight_no    = (seg.get("flight_number") or "").strip()
-                if not carrier_name or carrier_name.upper() == carrier_code.upper():
-                    label = flight_no
-                else:
-                    label = f"{carrier_name.upper()} {flight_no}"
-
+            if not r:
+                # --- No Flights block ---
+                header = f"{origin} to {dest} No Flights {start_fmt} – {end_fmt}"
+                lines.append(f"<p><b>{header}</b></p>")
+                cap_stops_txt = (str(cap_stops) if cap_stops is not None else "any")
+                cap_fd_txt    = _fmt_hours(cap_fd) if cap_fd is not None else "no limit"
                 lines.append(
-                    "<div>"
-                    f"{label} {dep_fmt}–{arr_fmt}{plus_txt} "
-                    f"{seg.get('dep_airport','')}–{seg.get('arr_airport','')} "
-                    f"Flight time {_fmt_td(seg_td)}"
-                    "</div>"
+                    f"<div style='color:#555'>Filters: Stops ≤ {cap_stops_txt}, "
+                    f"Per-direction travel time ≤ {cap_fd_txt}</div>"
                 )
+                lines.append("<div style='margin:10px 0 16px 0;'></div>")
+                continue
 
-        # -------- Return --------
-        stops_ret = max(0, len(ret) - 1)
-        lines.append(
-            f"<div><i>Return</i> "
-            f"{('Travel time ' + _fmt_td(ret_total_td)) if ret_total_td else ''}"
-            f"{(' ' if ret_total_td else '')}{stops_ret} stop{'s' if stops_ret!=1 else ''}</div>"
-        )
-        if not ret:
-            lines.append("<div>— (no return segments found)</div>")
-        else:
-            for seg in ret:
-                seg_td = _parse_iso8601_duration(seg.get("duration", "")) or _dur_td(seg.get("dep_at",""), seg.get("arr_at",""))
-                dep_fmt = _fmt_dt_long(seg.get("dep_at", ""))
-                arr_fmt = _fmt_dt_long(seg.get("arr_at", ""))
-                plus_txt = _plus_days(seg.get("dep_at",""), seg.get("arr_at",""))
+            # ---------- Have a result: render detailed block ----------
+            out = r.get("outbound_segments", []) or []
+            ret = r.get("return_segments", []) or []
 
-                carrier_name = (seg.get("carrier_name") or "").strip()
-                carrier_code = (seg.get("carrier_code") or "").strip()
-                flight_no    = (seg.get("flight_number") or "").strip()
-                if not carrier_name or carrier_name.upper() == carrier_code.upper():
-                    label = flight_no
-                else:
-                    label = f"{carrier_name.upper()} {flight_no}"
+            # Prefer itinerary durations if provided
+            out_total_td = _parse_iso8601_duration(r.get("out_total_duration", "")) or (
+                _dur_td(out[0]["dep_at"], out[-1]["arr_at"]) if out else None
+            )
+            ret_total_td = _parse_iso8601_duration(r.get("ret_total_duration", "")) or (
+                _dur_td(ret[0]["dep_at"], ret[-1]["arr_at"]) if ret else None
+            )
 
-                lines.append(
-                    "<div>"
-                    f"{label} {dep_fmt}–{arr_fmt}{plus_txt} "
-                    f"{seg.get('dep_airport','')}–{seg.get('arr_airport','')} "
-                    f"Flight time {_fmt_td(seg_td)}"
-                    "</div>"
-                )
+            # max travel time across directions
+            max_td = None
+            if out_total_td and ret_total_td:
+                max_td = max(out_total_td, ret_total_td, key=lambda t: t.total_seconds())
+            else:
+                max_td = out_total_td or ret_total_td
 
-        # Filters footer (you added in previous step)
-        cap_stops = r.get("cap_max_stops")
-        cap_fd    = r.get("cap_max_flight_duration")
-        def _fmt_hours(h):
-            if h is None: return None
-            try:
-                hf = float(h)
-                return f"{int(hf)} hr" if hf.is_integer() else f"{hf:.1f} hr"
-            except Exception:
-                return f"{h} hr"
-        cap_stops_txt = (str(cap_stops) if cap_stops is not None else "any")
-        cap_fd_txt    = _fmt_hours(cap_fd) if cap_fd is not None else "no limit"
-        lines.append(
-            f"<div style='color:#555'>Filters: Stops ≤ {cap_stops_txt}, Per-direction travel time ≤ {cap_fd_txt}</div>"
-        )
+            # Header with new date format
+            header_bits = [
+                f"{origin} to {dest}",
+                f"${r.get('price', 0):.2f} {r.get('currency','')}",
+                f"{start_fmt} – {end_fmt}",
+            ]
+            if max_td:
+                header_bits.append(f"Max travel time {_fmt_td(max_td)}")
+            lines.append(f"<p><b>{' '.join(header_bits)}</b></p>")
 
-        lines.append("<div style='margin:10px 0 16px 0;'></div>")
+            # Outbound
+            stops_out = max(0, len(out) - 1)
+            lines.append(
+                f"<div><i>Outbound</i> "
+                f"{('Travel time ' + _fmt_td(out_total_td)) if out_total_td else ''}"
+                f"{(' ' if out_total_td else '')}{stops_out} stop{'s' if stops_out!=1 else ''}</div>"
+            )
+            if not out:
+                lines.append("<div>— (no outbound segments found)</div>")
+            else:
+                for seg in out:
+                    seg_td = _parse_iso8601_duration(seg.get("duration", "")) or _dur_td(seg.get("dep_at",""), seg.get("arr_at",""))
+                    dep_fmt = _fmt_dt_long(seg.get("dep_at", ""))
+                    arr_fmt = _fmt_dt_long(seg.get("arr_at", ""))
+                    plus_txt = _plus_days(seg.get("dep_at",""), seg.get("arr_at",""))
+
+                    carrier_name = (seg.get("carrier_name") or "").strip()
+                    carrier_code = (seg.get("carrier_code") or "").strip()
+                    flight_no    = (seg.get("flight_number") or "").strip()
+                    label = flight_no if (not carrier_name or carrier_name.upper() == carrier_code.upper()) else f"{carrier_name.upper()} {flight_no}"
+
+                    lines.append(
+                        "<div>"
+                        f"{label} {dep_fmt}–{arr_fmt}{plus_txt} "
+                        f"{seg.get('dep_airport','')}–{seg.get('arr_airport','')} "
+                        f"Flight time {_fmt_td(seg_td)}"
+                        "</div>"
+                    )
+
+            # Return
+            stops_ret = max(0, len(ret) - 1)
+            lines.append(
+                f"<div><i>Return</i> "
+                f"{('Travel time ' + _fmt_td(ret_total_td)) if ret_total_td else ''}"
+                f"{(' ' if ret_total_td else '')}{stops_ret} stop{'s' if stops_ret!=1 else ''}</div>"
+            )
+            if not ret:
+                lines.append("<div>— (no return segments found)</div>")
+            else:
+                for seg in ret:
+                    seg_td = _parse_iso8601_duration(seg.get("duration", "")) or _dur_td(seg.get("dep_at",""), seg.get("arr_at",""))
+                    dep_fmt = _fmt_dt_long(seg.get("dep_at", ""))
+                    arr_fmt = _fmt_dt_long(seg.get("arr_at", ""))
+                    plus_txt = _plus_days(seg.get("dep_at",""), seg.get("arr_at",""))
+
+                    carrier_name = (seg.get("carrier_name") or "").strip()
+                    carrier_code = (seg.get("carrier_code") or "").strip()
+                    flight_no    = (seg.get("flight_number") or "").strip()
+                    label = flight_no if (not carrier_name or carrier_name.upper() == carrier_code.upper()) else f"{carrier_name.upper()} {flight_no}"
+
+                    lines.append(
+                        "<div>"
+                        f"{label} {dep_fmt}–{arr_fmt}{plus_txt} "
+                        f"{seg.get('dep_airport','')}–{seg.get('arr_airport','')} "
+                        f"Flight time {_fmt_td(seg_td)}"
+                        "</div>"
+                    )
+
+            # Filters footer for this itinerary
+            cap_stops_txt = (str(r.get("cap_max_stops", cap_stops)) if r.get("cap_max_stops", cap_stops) is not None else "any")
+            cap_fd_txt    = _fmt_hours(r.get("cap_max_flight_duration", cap_fd)) if r.get("cap_max_flight_duration", cap_fd) is not None else "no limit"
+            lines.append(
+                f"<div style='color:#555'>Filters: Stops ≤ {cap_stops_txt}, Per-direction travel time ≤ {cap_fd_txt}</div>"
+            )
+
+            lines.append("<div style='margin:10px 0 16px 0;'></div>")
 
     return "\n".join(lines)
+
 
 
 
