@@ -7,6 +7,15 @@ import yaml
 AMAD_AUTH_URL = "https://test.api.amadeus.com/v1/security/oauth2/token"
 AMAD_SEARCH_URL = "https://test.api.amadeus.com/v2/shopping/flight-offers"
 
+def _parse_iso(dt_str: str):
+    if not dt_str:
+        return None
+    s = dt_str.replace("Z", "+00:00")
+    try:
+        return datetime.fromisoformat(s)
+    except Exception:
+        return None
+
 def _fmt_day_from_iso_date(s: str) -> str:
     # "2026-07-06" -> "06 Jul"
     try:
@@ -179,14 +188,7 @@ def search_cheapest_for_window(
 
     # ---- helpers to compute per-direction totals (first dep → last arr) ----
     from datetime import datetime as _dt
-    def _parse_iso(dt_str: str):
-        if not dt_str:
-            return None
-        s = dt_str.replace("Z", "+00:00")
-        try:
-            return _dt.fromisoformat(s)
-        except Exception:
-            return None
+
 
     def _direction_total_minutes(itin: dict) -> Optional[int]:
         segs = (itin or {}).get("segments", []) or []
@@ -615,15 +617,18 @@ def build_daily_digest(best, cfg):
                         f"Flight time {_fmt_td(seg_td)}"
                         "</div>"
                     )
-                    max_stops_cap = r.get("cap_max_stops", None)
-                    max_fd_cap    = r.get("cap_max_flight_duration", None)  # hours per direction
-                    cap_stops_txt = f"Stops ≤ {max_stops_cap}" if max_stops_cap is not None else "Stops: any"
-                    cap_fd_txt    = f"Per-direction travel time ≤ {int(max_fd_cap)} hr" if max_fd_cap is not None else "Per-direction travel time: any"
-            
-                    lines.append(
-                        f"<div>Filters: {cap_stops_txt}, {cap_fd_txt} — "
-                        f"Window: {search_start_txt} – {search_end_txt}</div>"
-                    )
+                max_stops_cap = r.get("cap_max_stops", None)
+                max_fd_cap    = r.get("cap_max_flight_duration", None)  # hours per direction
+                cap_stops_txt = f"Stops ≤ {max_stops_cap}" if max_stops_cap is not None else "Stops: any"
+                cap_fd_txt    = (
+                    f"Per-direction travel time ≤ {int(max_fd_cap)} hr"
+                    if max_fd_cap is not None else "Per-direction travel time: any"
+                )
+                  
+                lines.append(
+                    f"<div>Filters: {cap_stops_txt}, {cap_fd_txt} — "
+                    f"Window: {search_start_txt} – {search_end_txt}</div>"
+                )
                     lines.append("<div style='margin:10px 0 16px 0;'></div>")
 
             
