@@ -213,6 +213,9 @@ def search_cheapest_for_window(
         "depart_date": iso(depart),
         "return_date": iso(return_date),
     })
+    # ↓↓↓ NEW: pass through the caps actually used for this search
+    s["cap_max_stops"] = max_stops
+    s["cap_max_flight_duration"] = max_flight_duration  # hours (per direction)
     return s
 
 
