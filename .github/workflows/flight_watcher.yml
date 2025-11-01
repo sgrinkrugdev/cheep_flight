@@ -14,18 +14,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: true   # keep GITHUB_TOKEN for later git push
+          fetch-depth: 0 
 
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       - run: pip install -r requirements.txt
-      - name: Verify code on runner
-        run: |
-          echo "Commit: $GITHUB_SHA"
-          echo "Looking for old fromisoformat call…"
-          grep -n 'fromisoformat(route\["start_date"\])' main.py || echo "Not found"
-          echo "---- main.py (first 220 lines, numbered) ----"
-          nl -ba main.py | sed -n '1,220p'
+
       - name: Verify code on runner
         run: |
           echo "Commit SHA: $GITHUB_SHA"
@@ -72,27 +67,32 @@ jobs:
       - name: Configure rclone for Google Drive (OAuth)
         if: always()
         env:
-          GDRIVE_OAUTH_TOKEN: ${{ secrets.GDRIVE_OAUTH_TOKEN }}
-          GDRIVE_FOLDER_ID:   ${{ secrets.GDRIVE_FOLDER_ID }}
+          GDRIVE_CLIENT_ID:     ${{ secrets.GDRIVE_CLIENT_ID }}
+          GDRIVE_CLIENT_SECRET: ${{ secrets.GDRIVE_CLIENT_SECRET }}
+          GDRIVE_OAUTH_TOKEN:   ${{ secrets.GDRIVE_OAUTH_TOKEN }}
+          GDRIVE_FOLDER_ID:     ${{ secrets.GDRIVE_FOLDER_ID }}
         run: |
           mkdir -p ~/.config/rclone
       
-          # Write a template that references env vars
+          # Write template with placeholders (no leading spaces below)
           cat > rclone.conf.tmpl <<'RC'
           [gdrive]
           type = drive
           scope = drive
+          client_id = ${GDRIVE_CLIENT_ID}
+          client_secret = ${GDRIVE_CLIENT_SECRET}
           token = ${GDRIVE_OAUTH_TOKEN}
           root_folder_id = ${GDRIVE_FOLDER_ID}
           RC
           
-              # Ensure envsubst is available, then expand vars into the real config
+              # Expand env vars into final config
               command -v envsubst >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y gettext-base)
               envsubst < rclone.conf.tmpl > ~/.config/rclone/rclone.conf
           
-              echo "rclone.conf written:"
-              sed -n '1,200p' ~/.config/rclone/rclone.conf
+              echo "rclone.conf written (client secret redacted):"
+              sed -n '1,200p' ~/.config/rclone/rclone.conf | sed -E 's/(client_secret = ).*/\1***REDACTED***/'
     
+        
 
 
 
