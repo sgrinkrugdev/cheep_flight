@@ -516,16 +516,31 @@ def build_daily_digest(best, cfg):
                     f"Flight time {seg_td_txt}"
                     "</div>"
                 )
+        # --- Filters footer (shows the active limits for this itinerary) ---
+        cap_stops = r.get("cap_max_stops")
+        cap_fd    = r.get("cap_max_flight_duration")  # hours (float or int)
+
+        def _fmt_hours(h):
+            if h is None:
+                return None
+            try:
+                hf = float(h)
+                return f"{int(hf)} hr" if hf.is_integer() else f"{hf:.1f} hr"
+            except Exception:
+                return f"{h} hr"
+
+        cap_stops_txt = (str(cap_stops) if cap_stops is not None else "any")
+        cap_fd_txt    = _fmt_hours(cap_fd) if cap_fd is not None else "no limit"
+
+        lines.append(
+            f"<div style='color:#555'>Filters: Stops ≤ {cap_stops_txt}, "
+            f"Per-direction travel time ≤ {cap_fd_txt}</div>"
+        )
 
         # You can keep your search-parameter footer if desired; omitted here for brevity.
         lines.append("<div style='margin:10px 0 16px 0;'></div>")
 
     return "\n".join(lines)
-
-
-
-
-
 
 
 def main():
