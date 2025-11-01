@@ -617,6 +617,8 @@ def build_daily_digest(best, cfg):
                         f"Flight time {_fmt_td(seg_td)}"
                         "</div>"
                     )
+
+                # --- footer for this itinerary (filters + CONFIG search window) ---
                 max_stops_cap = r.get("cap_max_stops", None)
                 max_fd_cap    = r.get("cap_max_flight_duration", None)  # hours per direction
                 cap_stops_txt = f"Stops ≤ {max_stops_cap}" if max_stops_cap is not None else "Stops: any"
@@ -624,10 +626,9 @@ def build_daily_digest(best, cfg):
                     f"Per-direction travel time ≤ {int(max_fd_cap)} hr"
                     if max_fd_cap is not None else "Per-direction travel time: any"
                 )
-                  
                 lines.append(
                     f"<div>Filters: {cap_stops_txt}, {cap_fd_txt} — "
-                    f"Window: {search_start_txt} – {search_end_txt}</div>"
+                    f"Window: {start_fmt} – {end_fmt}</div>"
                 )
                 lines.append("<div style='margin:10px 0 16px 0;'></div>")
 
