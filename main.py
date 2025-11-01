@@ -534,6 +534,12 @@ def build_daily_digest(best, cfg):
                 max_td = max(out_total_td, ret_total_td, key=lambda t: t.total_seconds())
             else:
                 max_td = out_total_td or ret_total_td
+            
+            # Actual trip dates from chosen itinerary
+            trip_start_dt = (out[0]["dep_at"] if out else r.get("out_depart"))
+            trip_end_dt   = (ret[-1]["arr_at"] if ret else (out[-1]["arr_at"] if out else r.get("ret_arrive")))
+            trip_start_txt = _fmt_day_from_dt(trip_start_dt)
+            trip_end_txt   = _fmt_day_from_dt(trip_end_dt)
 
             # Header with new date format
             header_bits = [
