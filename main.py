@@ -61,8 +61,11 @@ def summarize_offer(offer: dict, carriers: Dict[str, str]) -> Dict[str, Any]:
     currency = safe_get(offer, ["price", "currency"], "USD")
     validating = safe_get(offer, ["validatingAirlineCodes", 0], "N/A")
 
-    itin0 = safe_get(offer, ["itineraries", 0], {})
-    itin1 = safe_get(offer, ["itineraries", 1], {})
+    itin0 = safe_get(offer, ["itineraries", 0], {}) or {}
+    itin1 = safe_get(offer, ["itineraries", 1], {}) or {}
+
+    out_itin_duration = itin0.get("duration", "")  # e.g. "PT8H45M" (door-to-door, includes layovers)
+    ret_itin_duration = itin1.get("duration", "")
 
     def map_segments(itin):
         segs_out = []
@@ -79,6 +82,7 @@ def summarize_offer(offer: dict, carriers: Dict[str, str]) -> Dict[str, Any]:
                 "arr_airport": arr.get("iataCode", ""),
                 "dep_at": dep.get("at", ""),
                 "arr_at": arr.get("at", ""),
+                "duration": seg.get("duration", ""),   # NEW: pure flight-time for this segment (PTxHxM)
             })
         return segs_out
 
@@ -93,13 +97,13 @@ def summarize_offer(offer: dict, carriers: Dict[str, str]) -> Dict[str, Any]:
     return {
         "price": price,
         "currency": currency,
-        "airline": validating,  # validating airline code
+        "airline": validating,
 
         # segments
         "outbound_segments": outbound_segments,
         "return_segments": return_segments,
 
-        # quick fields used elsewhere
+        # quick fields
         "out_depart": out0.get("dep_at", ""),
         "ret_depart": ret0.get("dep_at", ""),
         "out_arrive": outN.get("arr_at", ""),
@@ -107,13 +111,16 @@ def summarize_offer(offer: dict, carriers: Dict[str, str]) -> Dict[str, Any]:
         "stops_out": max(0, len(outbound_segments) - 1),
         "stops_ret": max(0, len(return_segments) - 1),
 
-        # new fields you need for the CSV
+        # for CSV
         "out_flight": out0.get("flight_number", ""),
         "ret_flight": ret0.get("flight_number", ""),
         "airline_name_out": out0.get("carrier_name", ""),
         "airline_name_ret": ret0.get("carrier_name", ""),
-    }
 
+        # NEW: itinerary door-to-door durations
+        "out_total_duration": out_itin_duration,   # PT… includes layovers
+        "ret_total_duration": ret_itin_duration,
+    }
 
 
 def search_cheapest_for_window(
