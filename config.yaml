@@ -10,15 +10,21 @@ routes:
   - name: "IAD→LHR test"
     origin: IAD
     destination: LHR
-    start_date: "2026-07-06"   # use near-term dates to test
+    start_date: "2026-07-06"
     end_date:   "2026-07-16"
     durations: [10]
+    max_stops: 0              # ← per-route override (optional)
+    max_flight_duration: 15   # ← per-route override, hours, per direction
+
   - name: "IAD→FCO test"
     origin: IAD
     destination: FCO
     start_date: "2026-07-06"
     end_date:   "2026-07-16"
     durations: [10]
+    max_stops: 0
+    max_flight_duration: 20
+
 
 email:
   provider: ipower          # "ipower" or "sendgrid"
