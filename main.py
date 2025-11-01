@@ -615,16 +615,16 @@ def build_daily_digest(best, cfg):
                         f"Flight time {_fmt_td(seg_td)}"
                         "</div>"
                     )
-        max_stops_cap = r.get("cap_max_stops", None)
-        max_fd_cap    = r.get("cap_max_flight_duration", None)  # hours per direction
-        cap_stops_txt = f"Stops ≤ {max_stops_cap}" if max_stops_cap is not None else "Stops: any"
-        cap_fd_txt    = f"Per-direction travel time ≤ {int(max_fd_cap)} hr" if max_fd_cap is not None else "Per-direction travel time: any"
-
-        lines.append(
-            f"<div>Filters: {cap_stops_txt}, {cap_fd_txt} — "
-            f"Window: {search_start_txt} – {search_end_txt}</div>"
-        )
-        lines.append("<div style='margin:10px 0 16px 0;'></div>")
+                    max_stops_cap = r.get("cap_max_stops", None)
+                    max_fd_cap    = r.get("cap_max_flight_duration", None)  # hours per direction
+                    cap_stops_txt = f"Stops ≤ {max_stops_cap}" if max_stops_cap is not None else "Stops: any"
+                    cap_fd_txt    = f"Per-direction travel time ≤ {int(max_fd_cap)} hr" if max_fd_cap is not None else "Per-direction travel time: any"
+            
+                    lines.append(
+                        f"<div>Filters: {cap_stops_txt}, {cap_fd_txt} — "
+                        f"Window: {search_start_txt} – {search_end_txt}</div>"
+                    )
+                    lines.append("<div style='margin:10px 0 16px 0;'></div>")
 
             
 
