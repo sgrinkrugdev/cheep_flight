@@ -487,7 +487,7 @@ def build_daily_digest(best, cfg):
             if not r:
                 # --- No Flights block ---
                 header = f"{origin} to {dest} No Flights {start_fmt} – {end_fmt}"
-                lines.append(f"<p><b>{header}</b></p>")
+                lines.append(f"<div style='margin:0'><b>{header}</b></div>")
                 cap_stops_txt = (str(cap_stops) if cap_stops is not None else "any")
                 cap_fd_txt    = _fmt_hours(cap_fd) if cap_fd is not None else "no limit"
                 lines.append(
@@ -524,7 +524,7 @@ def build_daily_digest(best, cfg):
             ]
             if max_td:
                 header_bits.append(f"Max travel time {_fmt_td(max_td)}")
-            lines.append(f"<p><b>{' '.join(header_bits)}</b></p>")
+            lines.append(f"<div style='margin:0'><b>{' '.join(header_bits)}</b></div>")
 
             # Outbound
             stops_out = max(0, len(out) - 1)
