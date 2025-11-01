@@ -76,15 +76,23 @@ jobs:
           GDRIVE_FOLDER_ID:   ${{ secrets.GDRIVE_FOLDER_ID }}
         run: |
           mkdir -p ~/.config/rclone
-          cat > ~/.config/rclone/rclone.conf <<'RC'
+      
+          # Write a template that references env vars
+          cat > rclone.conf.tmpl <<'RC'
           [gdrive]
           type = drive
           scope = drive
           token = ${GDRIVE_OAUTH_TOKEN}
           root_folder_id = ${GDRIVE_FOLDER_ID}
           RC
-              # Show the config (no secrets beyond token JSON already in env)
+          
+              # Ensure envsubst is available, then expand vars into the real config
+              command -v envsubst >/dev/null 2>&1 || (sudo apt-get update && sudo apt-get install -y gettext-base)
+              envsubst < rclone.conf.tmpl > ~/.config/rclone/rclone.conf
+          
+              echo "rclone.conf written:"
               sed -n '1,200p' ~/.config/rclone/rclone.conf
+    
 
 
 
