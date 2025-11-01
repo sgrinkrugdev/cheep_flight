@@ -69,30 +69,23 @@ jobs:
         run: |
           curl -fsSL https://rclone.org/install.sh | sudo bash
 
-      - name: Configure rclone for Google Drive
+      - name: Configure rclone for Google Drive (OAuth)
         if: always()
         env:
-          GDRIVE_SA_JSON: ${{ secrets.GDRIVE_SA_JSON }}
-          GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
+          GDRIVE_OAUTH_TOKEN: ${{ secrets.GDRIVE_OAUTH_TOKEN }}
+          GDRIVE_FOLDER_ID:   ${{ secrets.GDRIVE_FOLDER_ID }}
         run: |
           mkdir -p ~/.config/rclone
-          echo "$GDRIVE_SA_JSON" > sa.json
-      
-          # 1) Write a template with variables (quoted heredoc OK)
-          cat > rclone.conf.tmpl <<'RC'
+          cat > ~/.config/rclone/rclone.conf <<'RC'
           [gdrive]
           type = drive
           scope = drive
-          service_account_file = sa.json
+          token = ${GDRIVE_OAUTH_TOKEN}
           root_folder_id = ${GDRIVE_FOLDER_ID}
           RC
-          
-          # 2) Expand variables into the real config
-          # (envsubst comes with the Ubuntu runner; if not, install: sudo apt-get update && sudo apt-get install -y gettext-base)
-          envsubst < rclone.conf.tmpl > ~/.config/rclone/rclone.conf
-      
-          echo "rclone.conf written:"
-          cat ~/.config/rclone/rclone.conf
+              # Show the config (no secrets beyond token JSON already in env)
+              sed -n '1,200p' ~/.config/rclone/rclone.conf
+
 
 
       - name: Upload CSV to Google Drive (rolling copy)
