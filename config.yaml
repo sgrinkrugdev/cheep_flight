@@ -10,14 +10,14 @@ routes:
   - name: "IAD→LHR test"
     origin: IAD
     destination: LHR
-    start_date: "2025-12-01"   # use near-term dates to test
-    end_date:   "2025-12-15"
+    start_date: "2026-07-06"   # use near-term dates to test
+    end_date:   "2026-07-31"
     durations: [10]
   - name: "IAD→FCO test"
     origin: IAD
     destination: FCO
-    start_date: "2025-12-01"
-    end_date:   "2025-12-15"
+    start_date: "2026-07-06"
+    end_date:   "2026-07-31"
     durations: [10]
 
 email:
