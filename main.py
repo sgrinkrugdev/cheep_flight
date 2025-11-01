@@ -629,7 +629,7 @@ def build_daily_digest(best, cfg):
                     f"<div>Filters: {cap_stops_txt}, {cap_fd_txt} — "
                     f"Window: {search_start_txt} – {search_end_txt}</div>"
                 )
-                    lines.append("<div style='margin:10px 0 16px 0;'></div>")
+                lines.append("<div style='margin:10px 0 16px 0;'></div>")
 
             
 
