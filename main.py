@@ -7,6 +7,25 @@ import yaml
 AMAD_AUTH_URL = "https://test.api.amadeus.com/v1/security/oauth2/token"
 AMAD_SEARCH_URL = "https://test.api.amadeus.com/v2/shopping/flight-offers"
 
+def _fmt_day_from_iso_date(s: str) -> str:
+    # "2026-07-06" -> "06 Jul"
+    try:
+        d = date.fromisoformat(s)
+        return d.strftime("%d %b")
+    except Exception:
+        return s or ""
+
+def _fmt_day_from_dt(dt_iso: str) -> str:
+    # "2026-07-06T21:05:00-04:00" -> "06 Jul"
+    dt = _parse_iso(dt_iso)
+    if not dt:
+        return ""
+    try:
+        return dt.strftime("%d %b")
+    except ValueError:
+        # Windows fallback: keep leading zero if present
+        return dt.strftime("%d %b")
+
 def fmt_dt(dt_iso: str) -> str:
     """Format ISO string like 2025-01-01T12:01:00 to 'Jan 01, 2025 12:01 PM'."""
     try:
