@@ -204,6 +204,11 @@ def search_cheapest_for_window(
                 continue
 
         filtered.append(o)
+    # >>> FIX: do NOT fall back to unfiltered offers if none pass
+    if filtered:
+        offers = filtered
+    else:
+        return None
 
     offers = filtered or offers  # if all filtered out, keep original so user sees "no results" correctly
 
