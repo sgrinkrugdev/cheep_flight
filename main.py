@@ -519,6 +519,15 @@ def build_daily_digest(best, cfg):
             # ---------- Have a result: render detailed block ----------
             out = r.get("outbound_segments", []) or []
             ret = r.get("return_segments", []) or []
+            
+            # Actual trip dates from chosen itinerary
+            trip_start_dt = (out[0]["dep_at"] if out else r.get("out_depart"))
+            trip_end_dt   = (ret[-1]["arr_at"] if ret else (out[-1]["arr_at"] if out else r.get("ret_arrive")))
+            trip_start_txt = _fmt_day_from_dt(trip_start_dt)
+            trip_end_txt   = _fmt_day_from_dt(trip_end_dt)
+            
+            search_start_txt = _fmt_day_from_iso_date(r.get("depart_date",""))
+            search_end_txt   = _fmt_day_from_iso_date(r.get("return_date",""))
 
             # Prefer itinerary durations if provided
             out_total_td = _parse_iso8601_duration(r.get("out_total_duration", "")) or (
@@ -535,21 +544,19 @@ def build_daily_digest(best, cfg):
             else:
                 max_td = out_total_td or ret_total_td
             
-            # Actual trip dates from chosen itinerary
-            trip_start_dt = (out[0]["dep_at"] if out else r.get("out_depart"))
-            trip_end_dt   = (ret[-1]["arr_at"] if ret else (out[-1]["arr_at"] if out else r.get("ret_arrive")))
-            trip_start_txt = _fmt_day_from_dt(trip_start_dt)
-            trip_end_txt   = _fmt_day_from_dt(trip_end_dt)
+
 
             # Header with new date format
             header_bits = [
-                f"{origin} to {dest}",
-                f"${r.get('price', 0):.2f} {r.get('currency','')}",
-                f"{start_fmt} – {end_fmt}",
+            f"{r.get('origin','')} to {r.get('destination','')}",
+            f"${r.get('price', 0):.2f} {r.get('currency','')}",
+            f"{trip_start_txt} – {trip_end_txt}",
             ]
             if max_td:
-                header_bits.append(f"Max travel time {_fmt_td(max_td)}")
+                header_bits.append(f"Max travel time { _fmt_td(max_td) }")
+
             lines.append(f"<div style='margin:0'><b>{' '.join(header_bits)}</b></div>")
+
 
             # Outbound
             stops_out = max(0, len(out) - 1)
@@ -608,6 +615,16 @@ def build_daily_digest(best, cfg):
                         f"Flight time {_fmt_td(seg_td)}"
                         "</div>"
                     )
+        max_stops_cap = r.get("cap_max_stops", None)
+        max_fd_cap    = r.get("cap_max_flight_duration", None)  # hours per direction
+        cap_stops_txt = f"Stops ≤ {max_stops_cap}" if max_stops_cap is not None else "Stops: any"
+        cap_fd_txt    = f"Per-direction travel time ≤ {int(max_fd_cap)} hr" if max_fd_cap is not None else "Per-direction travel time: any"
+
+        lines.append(
+            f"<div>Filters: {cap_stops_txt}, {cap_fd_txt} — "
+            f"Window: {search_start_txt} – {search_end_txt}</div>"
+        )
+        lines.append("<div style='margin:10px 0 16px 0;'></div>")
 
             # Filters footer for this itinerary
             cap_stops_txt = (str(r.get("cap_max_stops", cap_stops)) if r.get("cap_max_stops", cap_stops) is not None else "any")
