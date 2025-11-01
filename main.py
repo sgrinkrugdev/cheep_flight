@@ -228,7 +228,6 @@ def search_cheapest_for_window(token: str, origin: str, dest: str, depart: date,
     print(f"[debug] {origin}->{dest} {depart} dur={duration}: 429 persisted, skipping")
     return None
 
-
 def run_search(cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
     ci = os.getenv("AMADEUS_API_KEY") or cfg["amadeus"]["api_key"]
     cs = os.getenv("AMADEUS_API_SECRET") or cfg["amadeus"]["api_secret"]
@@ -237,32 +236,48 @@ def run_search(cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
     currency = cfg.get("currency", "USD")
     adults = int(cfg.get("adults", 1))
     cabin = cfg.get("cabin")
-    max_stops = cfg.get("max_stops", None)
-    max_stops = int(max_stops) if max_stops is not None else None
-    max_flight_duration = cfg.get("max_flight_duration", None)
-    max_flight_duration = int(max_flight_duration) if max_flight_duration is not None else None
 
+    # global defaults (can be None)
+    global_max_stops = cfg.get("max_stops", None)
+    global_max_stops = int(global_max_stops) if global_max_stops is not None else None
+    global_max_fd = cfg.get("max_flight_duration", None)  # hours; per direction
+    global_max_fd = float(global_max_fd) if global_max_fd is not None else None
 
     results = []
     for route in cfg["routes"]:
         origin = route["origin"]
         dest = route["destination"]
 
-        # Coerce YAML-loaded values (which may already be date objects) to strings
+        # per-route overrides with fallback to globals
+        route_max_stops = route.get("max_stops", global_max_stops)
+        route_max_stops = int(route_max_stops) if route_max_stops is not None else None
+
+        route_max_fd = route.get("max_flight_duration", global_max_fd)  # hours
+        route_max_fd = float(route_max_fd) if route_max_fd is not None else None
+
+        # dates
         start_raw = route["start_date"]
         end_raw = route["end_date"]
         start = date.fromisoformat(str(start_raw))
         end = date.fromisoformat(str(end_raw))
+
         durations = route.get("durations", [10])
         for dur in durations:
             dur = int(dur)
-            # end - dur ensures the return date is within the window
             for d0 in daterange(start, end - timedelta(days=dur)):
                 try:
                     found = search_cheapest_for_window(
-                        token, origin, dest, d0, dur, adults, cabin, currency, max_stops, max_flight_duration
+                        token=token,
+                        origin=origin,
+                        dest=dest,
+                        depart=d0,
+                        duration=dur,
+                        adults=adults,
+                        cabin=cabin,
+                        currency=currency,
+                        max_stops=route_max_stops,
+                        max_flight_duration=route_max_fd,
                     )
-
                 except Exception:
                     traceback.print_exc()
                     found = None
@@ -278,6 +293,7 @@ def run_search(cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
         if key not in best or r["price"] < best[key]["price"]:
             best[key] = r
     return list(best.values())
+
 
 def ensure_log(path: str):
     if not os.path.exists(path):
