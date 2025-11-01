@@ -92,9 +92,9 @@ jobs:
               echo "rclone.conf written (client secret redacted):"
               sed -n '1,200p' ~/.config/rclone/rclone.conf | sed -E 's/(client_secret = ).*/\1***REDACTED***/'
     
-        
-
-
+      - name: Can we list the target folder?
+        if: always()
+        run: rclone lsd gdrive:
 
       - name: Upload CSV to Google Drive (rolling copy)
         if: always()
