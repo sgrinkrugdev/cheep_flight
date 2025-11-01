@@ -626,14 +626,7 @@ def build_daily_digest(best, cfg):
         )
         lines.append("<div style='margin:10px 0 16px 0;'></div>")
 
-            # Filters footer for this itinerary
-            cap_stops_txt = (str(r.get("cap_max_stops", cap_stops)) if r.get("cap_max_stops", cap_stops) is not None else "any")
-            cap_fd_txt    = _fmt_hours(r.get("cap_max_flight_duration", cap_fd)) if r.get("cap_max_flight_duration", cap_fd) is not None else "no limit"
-            lines.append(
-                f"<div style='color:#555'>Filters: Stops ≤ {cap_stops_txt}, Per-direction travel time ≤ {cap_fd_txt}</div>"
-            )
-
-            lines.append("<div style='margin:10px 0 16px 0;'></div>")
+            
 
     return "\n".join(lines)
 
