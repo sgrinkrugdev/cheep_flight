@@ -4,8 +4,17 @@ from datetime import datetime, timedelta, date
 from typing import List, Dict, Any, Optional
 import yaml
 
-AMAD_AUTH_URL = "https://test.api.amadeus.com/v1/security/oauth2/token"
-AMAD_SEARCH_URL = "https://test.api.amadeus.com/v2/shopping/flight-offers"
+AMAD_ENDPOINTS = {
+    "test": {
+        "auth":   "https://test.api.amadeus.com/v1/security/oauth2/token",
+        "search": "https://test.api.amadeus.com/v2/shopping/flight-offers",
+    },
+    "prod": {
+        "auth":   "https://api.amadeus.com/v1/security/oauth2/token",
+        "search": "https://api.amadeus.com/v2/shopping/flight-offers",
+    },
+}
+
 
 def _parse_iso(dt_str: str):
     if not dt_str:
