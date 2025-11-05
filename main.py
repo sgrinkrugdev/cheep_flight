@@ -296,9 +296,12 @@ def search_cheapest_for_window(
 
 
 def run_search(cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
-    ci = os.getenv("AMADEUS_API_KEY") or cfg["amadeus"]["api_key"]
-    cs = os.getenv("AMADEUS_API_SECRET") or cfg["amadeus"]["api_secret"]
-    token = amadeus_get_token(ci, cs)
+    env = resolve_amadeus_env(cfg)
+    endpoints = AMAD_ENDPOINTS[env]
+    ci, cs = get_amadeus_credentials(cfg, env)
+
+    token = amadeus_get_token(endpoints["auth"], ci, cs)
+
 
     currency = cfg.get("currency", "USD")
     adults = int(cfg.get("adults", 1))
@@ -335,6 +338,7 @@ def run_search(cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
                 try:
                     found = search_cheapest_for_window(
                         token=token,
+                        search_url=endpoints["search"],
                         origin=origin,
                         dest=dest,
                         depart=d0,
