@@ -93,15 +93,16 @@ def daterange(start: date, end: date):
     for i in range(days + 1):
         yield start + timedelta(days=i)
 
-def amadeus_get_token(client_id: str, client_secret: str) -> str:
+def amadeus_get_token(auth_url: str, client_id: str, client_secret: str) -> str:
     resp = requests.post(
-        AMAD_AUTH_URL,
+        auth_url,
         data={"grant_type": "client_credentials"},
         auth=(client_id, client_secret),
         timeout=20
     )
     resp.raise_for_status()
     return resp.json()["access_token"]
+
 
 def iso(d: date) -> str:
     return d.isoformat()
