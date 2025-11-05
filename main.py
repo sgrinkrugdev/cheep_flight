@@ -15,7 +15,39 @@ AMAD_ENDPOINTS = {
     },
 }
 
+def resolve_amadeus_env(cfg) -> str:
+    env = (cfg.get("amadeus", {}).get("env") or "test").strip().lower()
+    return "prod" if env in ("prod", "production", "live") else "test"
 
+def get_amadeus_credentials(cfg, env: str):
+    """
+    Priority:
+      1) Environment-specific GitHub secrets
+         - test: AMADEUS_API_KEY_TEST / AMADEUS_API_SECRET_TEST
+         - prod: AMADEUS_API_KEY_PROD / AMADEUS_API_SECRET_PROD
+      2) Values in config.yaml (amadeus.api_key / amadeus.api_secret)
+    """
+    if env == "prod":
+        key = os.getenv("AMADEUS_API_KEY_PROD")
+        sec = os.getenv("AMADEUS_API_SECRET_PROD")
+    else:
+        key = os.getenv("AMADEUS_API_KEY_TEST") or os.getenv("AMADEUS_API_KEY")
+        sec = os.getenv("AMADEUS_API_SECRET_TEST") or os.getenv("AMADEUS_API_SECRET")
+
+    # final fallback to config file (not recommended for prod)
+    if not key:
+        key = cfg.get("amadeus", {}).get("api_key")
+    if not sec:
+        sec = cfg.get("amadeus", {}).get("api_secret")
+
+    if not key or not sec:
+        raise RuntimeError(
+            f"Amadeus credentials missing for env='{env}'. "
+            f"Expected GitHub secrets "
+            f"{'AMADEUS_API_KEY_PROD/AMADEUS_API_SECRET_PROD' if env=='prod' else 'AMADEUS_API_KEY_TEST/AMADEUS_API_SECRET_TEST'} "
+            f"or config.amadeus.api_key/api_secret."
+        )
+    return key, sec
 def _parse_iso(dt_str: str):
     if not dt_str:
         return None
