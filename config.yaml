@@ -40,6 +40,6 @@ amadeus:
   api_secret: "YOUR_AMADEUS_SECRET"
   #AMADEUS_API_KEY_TEST, AMADEUS_API_SECRET_TEST for sandbox
   #AMADEUS_API_KEY_PROD, AMADEUS_API_SECRET_PROD for production
-  env: test            # "test" (sandbox) or "prod"
+  env: prod            # "test" (sandbox) or "prod"
   api_key: ""          # optional fallback (usually leave blank)
   api_secret: ""       # optional fallback (usually leave blank)
