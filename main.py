@@ -280,8 +280,7 @@ def search_cheapest_for_window(
     else:
         return None
 
-    offers = filtered or offers  # if all filtered out, keep original so user sees "no results" correctly
-
+    
     cheapest = pick_cheapest_offer(offers)
     if not cheapest:
         return None
