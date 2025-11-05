@@ -7,7 +7,7 @@ max_flight_duration: 30    # NEW: total air time cap (hours) OUT+RET
 log_csv: cheapest_log.csv
 
 routes:
-   - name: "Dublin"
+  - name: "Dublin"
     origin: IAD
     destination: DUB
     start_date: "2026-07-06"
