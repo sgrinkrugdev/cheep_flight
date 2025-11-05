@@ -36,10 +36,6 @@ email:
 
 
 amadeus:
-  api_key: "YOUR_AMADEUS_KEY"
-  api_secret: "YOUR_AMADEUS_SECRET"
-  #AMADEUS_API_KEY_TEST, AMADEUS_API_SECRET_TEST for sandbox
-  #AMADEUS_API_KEY_PROD, AMADEUS_API_SECRET_PROD for production
   env: prod            # "test" (sandbox) or "prod"
   api_key: ""          # optional fallback (usually leave blank)
   api_secret: ""       # optional fallback (usually leave blank)
