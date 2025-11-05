@@ -7,23 +7,347 @@ max_flight_duration: 30    # NEW: total air time cap (hours) OUT+RET
 log_csv: cheapest_log.csv
 
 routes:
-  - name: "IAD→LHR test"
+   - name: "Dublin"
     origin: IAD
-    destination: LHR
-    start_date: "2026-07-11"
-    end_date:   "2026-07-23"
-    durations: [10] #days beween outbound and return
-    max_stops: 1              # ← per-route override (optional)
-    max_flight_duration: 20   # ← per-route override, hours, per direction
-
-  - name: "IAD→FCO test"
-    origin: IAD
-    destination: FCO
-    start_date: "2026-07-11"
-    end_date:   "2026-07-23"
-    durations: [10] #days beween outbound and return
-    max_stops: 2
+    destination: DUB
+    start_date: "2026-07-06"
+    end_date:   "2026-07-29"
+    durations: [10]
+    max_stops: 1
     max_flight_duration: 20
+
+  - name: "Paris"
+    origin: IAD
+    destination: CDG
+    start_date: "2026-07-06"
+    end_date:   "2026-07-29"
+    durations: [10]
+    max_stops: 1
+    max_flight_duration: 20
+
+  - name: "Porto"
+    origin: IAD
+    destination: OPO
+    start_date: "2026-07-06"
+    end_date:   "2026-07-29"
+    durations: [10]
+    max_stops: 1
+    max_flight_duration: 20
+
+  - name: "Lisbon"
+    origin: IAD
+    destination: LIS
+    start_date: "2026-07-06"
+    end_date:   "2026-07-29"
+    durations: [10]
+    max_stops: 1
+    max_flight_duration: 20
+
+  - name: "Seville"
+    origin: IAD
+    destination: SVQ
+    start_date: "2026-07-06"
+    end_date:   "2026-07-29"
+    durations: [10]
+    max_stops: 1
+    max_flight_duration: 20
+
+  - name: "Bordeaux"
+    origin: IAD
+    destination: BOD
+    start_date: "2026-07-06"
+    end_date:   "2026-07-29"
+    durations: [10]
+    max_stops: 1
+    max_flight_duration: 20
+
+  - name: "Amsterdam"
+    origin: IAD
+    destination: AMS
+    start_date: "2026-07-06"
+    end_date:   "2026-07-29"
+    durations: [10]
+    max_stops: 1
+    max_flight_duration: 20
+
+  - name: "Zurich"
+    origin: IAD
+    destination: ZRH
+    start_date: "2026-07-06"
+    end_date:   "2026-07-29"
+    durations: [10]
+    max_stops: 1
+    max_flight_duration: 20
+
+  - name: "Milan"
+    origin: IAD
+    destination: MXP
+    start_date: "2026-07-06"
+    end_date:   "2026-07-29"
+    durations: [10]
+    max_stops: 1
+    max_flight_duration: 20
+
+  - name: "Munich"
+    origin: IAD
+    destination: MUC
+    start_date: "2026-07-06"
+    end_date:   "2026-07-29"
+    durations: [10]
+    max_stops: 1
+    max_flight_duration: 20
+
+  - name: "Hamburg"
+    origin: IAD
+    destination: HAM
+    start_date: "2026-07-06"
+    end_date:   "2026-07-29"
+    durations: [10]
+    max_stops: 1
+    max_flight_duration: 20
+
+  - name: "Copenhagen"
+    origin: IAD
+    destination: CPH
+    start_date: "2026-07-06"
+    end_date:   "2026-07-29"
+    durations: [10]
+    max_stops: 1
+    max_flight_duration: 20
+
+  - name: "Berlin"
+    origin: IAD
+    destination: BER
+    start_date: "2026-07-06"
+    end_date:   "2026-07-29"
+    durations: [10]
+    max_stops: 1
+    max_flight_duration: 20
+
+  - name: "Warsaw"
+    origin: IAD
+    destination: WAW
+    start_date: "2026-07-06"
+    end_date:   "2026-07-29"
+    durations: [10]
+    max_stops: 1
+    max_flight_duration: 20
+
+  - name: "Krakow"
+    origin: IAD
+    destination: KRK
+    start_date: "2026-07-06"
+    end_date:   "2026-07-29"
+    durations: [10]
+    max_stops: 1
+    max_flight_duration: 20
+
+  - name: "Athens"
+    origin: IAD
+    destination: ATH
+    start_date: "2026-07-06"
+    end_date:   "2026-07-29"
+    durations: [10]
+    max_stops: 1
+    max_flight_duration: 20
+
+  - name: "Stockholm"
+    origin: IAD
+    destination: ARN
+    start_date: "2026-07-06"
+    end_date:   "2026-07-29"
+    durations: [10]
+    max_stops: 1
+    max_flight_duration: 20
+
+  - name: "Oslo"
+    origin: IAD
+    destination: OSL
+    start_date: "2026-07-06"
+    end_date:   "2026-07-29"
+    durations: [10]
+    max_stops: 1
+    max_flight_duration: 20
+
+  - name: "Helsinki"
+    origin: IAD
+    destination: HEL
+    start_date: "2026-07-06"
+    end_date:   "2026-07-29"
+    durations: [10]
+    max_stops: 1
+    max_flight_duration: 20
+
+# - name: "Dublin"
+#   origin: IAD
+#   destination: DUB
+#   start_date: "2026-07-06"
+#   end_date:   "2026-07-29"
+#   durations: [10]
+#   max_stops: 1
+#   max_flight_duration: 20
+
+# - name: "Paris"
+#   origin: IAD
+#   destination: CDG
+#   start_date: "2026-07-06"
+#   end_date:   "2026-07-29"
+#   durations: [10]
+#   max_stops: 1
+#   max_flight_duration: 20
+
+# - name: "Porto"
+#   origin: IAD
+#   destination: OPO
+#   start_date: "2026-07-06"
+#   end_date:   "2026-07-29"
+#   durations: [10]
+#   max_stops: 1
+#   max_flight_duration: 20
+
+# - name: "Lisbon"
+#   origin: IAD
+#   destination: LIS
+#   start_date: "2026-07-06"
+#   end_date:   "2026-07-29"
+#   durations: [10]
+#   max_stops: 1
+#   max_flight_duration: 20
+
+# - name: "Seville"
+#   origin: IAD
+#   destination: SVQ
+#   start_date: "2026-07-06"
+#   end_date:   "2026-07-29"
+#   durations: [10]
+#   max_stops: 1
+#   max_flight_duration: 20
+
+# - name: "Bordeaux"
+#   origin: IAD
+#   destination: BOD
+#   start_date: "2026-07-06"
+#   end_date:   "2026-07-29"
+#   durations: [10]
+#   max_stops: 1
+#   max_flight_duration: 20
+
+# - name: "Amsterdam"
+#   origin: IAD
+#   destination: AMS
+#   start_date: "2026-07-06"
+#   end_date:   "2026-07-29"
+#   durations: [10]
+#   max_stops: 1
+#   max_flight_duration: 20
+
+# - name: "Zurich"
+#   origin: IAD
+#   destination: ZRH
+#   start_date: "2026-07-06"
+#   end_date:   "2026-07-29"
+#   durations: [10]
+#   max_stops: 1
+#   max_flight_duration: 20
+
+# - name: "Milan"
+#   origin: IAD
+#   destination: MXP
+#   start_date: "2026-07-06"
+#   end_date:   "2026-07-29"
+#   durations: [10]
+#   max_stops: 1
+#   max_flight_duration: 20
+
+# - name: "Munich"
+#   origin: IAD
+#   destination: MUC
+#   start_date: "2026-07-06"
+#   end_date:   "2026-07-29"
+#   durations: [10]
+#   max_stops: 1
+#   max_flight_duration: 20
+
+# - name: "Hamburg"
+#   origin: IAD
+#   destination: HAM
+#   start_date: "2026-07-06"
+#   end_date:   "2026-07-29"
+#   durations: [10]
+#   max_stops: 1
+#   max_flight_duration: 20
+
+# - name: "Copenhagen"
+#   origin: IAD
+#   destination: CPH
+#   start_date: "2026-07-06"
+#   end_date:   "2026-07-29"
+#   durations: [10]
+#   max_stops: 1
+#   max_flight_duration: 20
+
+# - name: "Berlin"
+#   origin: IAD
+#   destination: BER
+#   start_date: "2026-07-06"
+#   end_date:   "2026-07-29"
+#   durations: [10]
+#   max_stops: 1
+#   max_flight_duration: 20
+
+# - name: "Warsaw"
+#   origin: IAD
+#   destination: WAW
+#   start_date: "2026-07-06"
+#   end_date:   "2026-07-29"
+#   durations: [10]
+#   max_stops: 1
+#   max_flight_duration: 20
+
+# - name: "Krakow"
+#   origin: IAD
+#   destination: KRK
+#   start_date: "2026-07-06"
+#   end_date:   "2026-07-29"
+#   durations: [10]
+#   max_stops: 1
+#   max_flight_duration: 20
+
+# - name: "Athens"
+#   origin: IAD
+#   destination: ATH
+#   start_date: "2026-07-06"
+#   end_date:   "2026-07-29"
+#   durations: [10]
+#   max_stops: 1
+#   max_flight_duration: 20
+
+# - name: "Stockholm"
+#   origin: IAD
+#   destination: ARN
+#   start_date: "2026-07-06"
+#   end_date:   "2026-07-29"
+#   durations: [10]
+#   max_stops: 1
+#   max_flight_duration: 20
+
+# - name: "Oslo"
+#   origin: IAD
+#   destination: OSL
+#   start_date: "2026-07-06"
+#   end_date:   "2026-07-29"
+#   durations: [10]
+#   max_stops: 1
+#   max_flight_duration: 20
+
+# - name: "Helsinki"
+#   origin: IAD
+#   destination: HEL
+#   start_date: "2026-07-06"
+#   end_date:   "2026-07-29"
+#   durations: [10]
+#   max_stops: 1
+#   max_flight_duration: 20
 
 
 email:
