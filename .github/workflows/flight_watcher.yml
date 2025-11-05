@@ -42,7 +42,19 @@ jobs:
           SMTP_PORT: ${{ secrets.SMTP_PORT }}
           SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
-        run: python main.py
+
+          AMADEUS_API_KEY_TEST:    ${{ secrets.AMADEUS_API_KEY_TEST }}
+          AMADEUS_API_SECRET_TEST: ${{ secrets.AMADEUS_API_SECRET_TEST }}
+          AMADEUS_API_KEY_PROD:    ${{ secrets.AMADEUS_API_KEY_PROD }}
+          AMADEUS_API_SECRET_PROD: ${{ secrets.AMADEUS_API_SECRET_PROD }}
+          AMADEUS_ENV:             ${{ vars.AMADEUS_ENV }}  # optional repo variable to override config
+
+        run: |
+          echo "Running Flight Watcher…"
+          echo "AMADEUS_ENV (from repo vars): '${AMADEUS_ENV}'"
+          python main.py
+
+        #run: python main.py
       - name: Commit CSV (append history)
         if: always()
         run: |
