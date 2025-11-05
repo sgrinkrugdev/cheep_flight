@@ -195,6 +195,7 @@ def summarize_offer(offer: dict, carriers: Dict[str, str]) -> Dict[str, Any]:
 
 def search_cheapest_for_window(
     token: str,
+    search_url: str,
     origin: str,
     dest: str,
     depart: date,
@@ -220,7 +221,7 @@ def search_cheapest_for_window(
         params["travelClass"] = cabin
 
     headers = {"Authorization": f"Bearer {token}"}
-    resp = requests.get(AMAD_SEARCH_URL, headers=headers, params=params, timeout=30)
+    resp = requests.get(search_url, headers=headers, params=params, timeout=30)
     if resp.status_code >= 400:
         return None
     data = resp.json()
