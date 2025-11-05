@@ -15,9 +15,15 @@ AMAD_ENDPOINTS = {
     },
 }
 
-def resolve_amadeus_env(cfg) -> str:
-    env = (cfg.get("amadeus", {}).get("env") or "test").strip().lower()
-    return "prod" if env in ("prod", "production", "live") else "test"
+def resolve_amadeus_env(cfg: Dict[str, Any]) -> str:
+    env_from_var = (os.getenv("AMADEUS_ENV") or "").strip().lower()
+    env_from_cfg = str(cfg.get("amadeus", {}).get("env", "test")).strip().lower()
+    env = (env_from_var or env_from_cfg or "test")
+    if env not in ("test", "prod"):
+        env = "test"
+    print(f"[Amadeus] Effective env: {env} (AMADEUS_ENV={env_from_var!r}, config={env_from_cfg!r})")
+    return env
+
 
 def get_amadeus_credentials(cfg, env: str):
     """
@@ -294,11 +300,23 @@ def search_cheapest_for_window(
     s["cap_max_flight_duration"] = max_flight_duration  # hours (per direction)
     return s
 
+def _effective_amadeus_env(cfg: dict) -> str:
+    env_from_var = (os.getenv("AMADEUS_ENV") or "").strip()
+    env_from_cfg = str(cfg.get("amadeus", {}).get("env", "test")).strip()
+    env = (env_from_var or env_from_cfg or "test").lower()
+    if env not in ("test", "prod"):
+        env = "test"
+    print(f"[Amadeus] Effective env: {env} (AMADEUS_ENV={env_from_var!r}, config={env_from_cfg!r})")
+    return env
 
 def run_search(cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
     env = resolve_amadeus_env(cfg)
     endpoints = AMAD_ENDPOINTS[env]
     ci, cs = get_amadeus_credentials(cfg, env)
+
+    # NEW: log what we’re about to use
+    print(f"[Amadeus] Using env={env} auth={endpoints['auth']} search={endpoints['search']}")
+    print(f"[Amadeus] Credentials source: {'PROD' if env=='prod' else 'TEST'} GitHub Secrets")
 
     token = amadeus_get_token(endpoints["auth"], ci, cs)
 
