@@ -14,7 +14,7 @@ routes:
     end_date:   "2026-07-23"
     durations: [10] #days beween outbound and return
     max_stops: 1              # ← per-route override (optional)
-    max_flight_duration: 2   # ← per-route override, hours, per direction
+    max_flight_duration: 20   # ← per-route override, hours, per direction
 
   - name: "IAD→FCO test"
     origin: IAD
@@ -23,7 +23,7 @@ routes:
     end_date:   "2026-07-23"
     durations: [10] #days beween outbound and return
     max_stops: 2
-    max_flight_duration: 2
+    max_flight_duration: 20
 
 
 email:
