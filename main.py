@@ -300,14 +300,7 @@ def search_cheapest_for_window(
     s["cap_max_flight_duration"] = max_flight_duration  # hours (per direction)
     return s
 
-def _effective_amadeus_env(cfg: dict) -> str:
-    env_from_var = (os.getenv("AMADEUS_ENV") or "").strip()
-    env_from_cfg = str(cfg.get("amadeus", {}).get("env", "test")).strip()
-    env = (env_from_var or env_from_cfg or "test").lower()
-    if env not in ("test", "prod"):
-        env = "test"
-    print(f"[Amadeus] Effective env: {env} (AMADEUS_ENV={env_from_var!r}, config={env_from_cfg!r})")
-    return env
+
 
 def run_search(cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
     env = resolve_amadeus_env(cfg)
