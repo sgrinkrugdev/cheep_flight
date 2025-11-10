@@ -235,19 +235,55 @@ def search_cheapest_for_window(
     if not offers:
         return None
 
-    # ---- helpers to compute per-direction totals (first dep → last arr) ----
-    from datetime import datetime as _dt
+# ---- helpers to compute per-direction totals (prefer itinerary["duration"]) ----
+from datetime import datetime as _dt
 
+def _minutes_from_iso8601(dur: str) -> Optional[int]:
+    """
+    Parse strings like 'PT8H45M' or 'PT9H' to minutes.
+    Returns None if not parseable.
+    """
+    if not isinstance(dur, str) or not dur.startswith("P"):
+        return None
+    h = m = 0
+    # split date/time part
+    t = dur.split("T", 1)[-1] if "T" in dur else ""
+    # hours
+    if "H" in t:
+        try:
+            h = int(t.split("H", 1)[0].split("M")[0].split("S")[0].split("D")[-1].strip("PT") or 0)
+        except Exception:
+            # simpler robust parse
+            try:
+                h = int(t.split("H", 1)[0].lstrip("PT"))
+            except Exception:
+                h = 0
+        t = t.split("H", 1)[1]
+    # minutes
+    if "M" in t:
+        try:
+            m = int(t.split("M", 1)[0])
+        except Exception:
+            m = 0
+    return h * 60 + m
 
-    def _direction_total_minutes(itin: dict) -> Optional[int]:
-        segs = (itin or {}).get("segments", []) or []
-        if not segs:
-            return None
-        first_dep = _parse_iso(segs[0].get("departure", {}).get("at", ""))
-        last_arr  = _parse_iso(segs[-1].get("arrival", {}).get("at", ""))
-        if not first_dep or not last_arr:
-            return None
-        return int((last_arr - first_dep).total_seconds() // 60)
+def _direction_total_minutes(itin: dict) -> Optional[int]:
+    # 1) Prefer Amadeus itinerary door-to-door duration (already includes layovers)
+    dur_str = (itin or {}).get("duration", "")
+    mins = _minutes_from_iso8601(dur_str)
+    if mins is not None:
+        return mins
+
+    # 2) Fallback: compute from first departure → last arrival timestamps
+    segs = (itin or {}).get("segments", []) or []
+    if not segs:
+        return None
+    first_dep = _parse_iso(segs[0].get("departure", {}).get("at", ""))
+    last_arr  = _parse_iso(segs[-1].get("arrival", {}).get("at", ""))
+    if not first_dep or not last_arr:
+        return None
+    return int((last_arr - first_dep).total_seconds() // 60)
+
 
     def _stops_count(itin: dict) -> int:
         segs = (itin or {}).get("segments", []) or []
