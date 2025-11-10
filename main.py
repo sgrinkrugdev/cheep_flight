@@ -223,7 +223,6 @@ def search_cheapest_for_window(
         "max": "250",
         # no 'sort' in test env
     }
-    params["sort"] = "PRICE"
     if cabin:
         params["travelClass"] = cabin
 
