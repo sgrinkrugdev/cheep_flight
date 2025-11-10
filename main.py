@@ -220,11 +220,15 @@ def search_cheapest_for_window(
         "returnDate": iso(return_date),
         "adults": str(adults),
         "currencyCode": currency,
-        "max": "20",
+        "max": "250",
         # no 'sort' in test env
     }
     if cabin:
         params["travelClass"] = cabin
+
+    # If caller wants nonstop, let Amadeus filter at the source.
+    if max_stops == 0:
+       params["nonStop"] = "true"
 
     headers = {"Authorization": f"Bearer {token}"}
     resp = requests.get(search_url, headers=headers, params=params, timeout=30)
