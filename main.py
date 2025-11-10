@@ -234,108 +234,46 @@ def search_cheapest_for_window(
     offers = data.get("data", [])
     if not offers:
         return None
+    # ---- helpers to compute per-direction totals (prefer itinerary["duration"]) ----
+    import re
 
-# ---- helpers to compute per-direction totals (prefer itinerary["duration"]) ----
-from datetime import datetime as _dt
+    _ISO8601_DUR_RE = re.compile(r"^P(?:(?P<days>\d+)D)?(?:T(?:(?P<hours>\d+)H)?(?:(?P<minutes>\d+)M)?)?$")
 
-def _minutes_from_iso8601(dur: str) -> Optional[int]:
-    """
-    Parse strings like 'PT8H45M' or 'PT9H' to minutes.
-    Returns None if not parseable.
-    """
-    if not isinstance(dur, str) or not dur.startswith("P"):
-        return None
-    h = m = 0
-    # split date/time part
-    t = dur.split("T", 1)[-1] if "T" in dur else ""
-    # hours
-    if "H" in t:
-        try:
-            h = int(t.split("H", 1)[0].split("M")[0].split("S")[0].split("D")[-1].strip("PT") or 0)
-        except Exception:
-            # simpler robust parse
-            try:
-                h = int(t.split("H", 1)[0].lstrip("PT"))
-            except Exception:
-                h = 0
-        t = t.split("H", 1)[1]
-    # minutes
-    if "M" in t:
-        try:
-            m = int(t.split("M", 1)[0])
-        except Exception:
-            m = 0
-    return h * 60 + m
+    def _minutes_from_iso8601(dur: str) -> Optional[int]:
+        """
+        Parse 'PT8H45M', 'PT9H', 'P1DT2H', 'PT55M' into total minutes.
+        Returns None if not parseable.
+        """
+        if not isinstance(dur, str):
+            return None
+        m = _ISO8601_DUR_RE.match(dur)
+        if not m:
+            return None
+        days = int(m.group("days") or 0)
+        hours = int(m.group("hours") or 0)
+        minutes = int(m.group("minutes") or 0)
+        return days * 24 * 60 + hours * 60 + minutes
 
-def _direction_total_minutes(itin: dict) -> Optional[int]:
-    # 1) Prefer Amadeus itinerary door-to-door duration (already includes layovers)
-    dur_str = (itin or {}).get("duration", "")
-    mins = _minutes_from_iso8601(dur_str)
-    if mins is not None:
-        return mins
+    def _direction_total_minutes(itin: dict) -> Optional[int]:
+        # 1) Prefer Amadeus itinerary door-to-door duration (includes layovers)
+        dur_str = (itin or {}).get("duration", "")
+        mins = _minutes_from_iso8601(dur_str)
+        if mins is not None:
+            return mins
 
-    # 2) Fallback: compute from first departure → last arrival timestamps
-    segs = (itin or {}).get("segments", []) or []
-    if not segs:
-        return None
-    first_dep = _parse_iso(segs[0].get("departure", {}).get("at", ""))
-    last_arr  = _parse_iso(segs[-1].get("arrival", {}).get("at", ""))
-    if not first_dep or not last_arr:
-        return None
-    return int((last_arr - first_dep).total_seconds() // 60)
-
+        # 2) Fallback: compute from first departure → last arrival timestamps
+        segs = (itin or {}).get("segments", []) or []
+        if not segs:
+            return None
+        first_dep = _parse_iso(segs[0].get("departure", {}).get("at", ""))
+        last_arr  = _parse_iso(segs[-1].get("arrival", {}).get("at", ""))
+        if not first_dep or not last_arr:
+            return None
+        return int((last_arr - first_dep).total_seconds() // 60)
 
     def _stops_count(itin: dict) -> int:
         segs = (itin or {}).get("segments", []) or []
         return max(0, len(segs) - 1)
-
-    # ---- apply filters: max_stops and max_flight_duration (per direction) ----
-    filtered = []
-    for o in offers:
-        it0 = o.get("itineraries", [{}])[0]
-        it1 = o.get("itineraries", [{}])[1] if len(o.get("itineraries", [])) > 1 else {}
-
-        # stops filter
-        if max_stops is not None:
-            if _stops_count(it0) > max_stops or _stops_count(it1) > max_stops:
-                continue
-
-        # flight duration per direction (includes layovers)
-        if max_flight_duration is not None:
-            cap_mins = int(float(max_flight_duration) * 60)
-            t0 = _direction_total_minutes(it0)
-            t1 = _direction_total_minutes(it1)
-            # require each present direction to be under/equal cap
-            if (t0 is not None and t0 > cap_mins) or (t1 is not None and t1 > cap_mins):
-                continue
-
-        filtered.append(o)
-    # >>> FIX: do NOT fall back to unfiltered offers if none pass
-    if filtered:
-        offers = filtered
-    else:
-        return None
-
-    
-    cheapest = pick_cheapest_offer(offers)
-    if not cheapest:
-        return None
-
-    # summarize (your existing summarize_offer already builds segments/stops)
-    # NOTE: if your summarize_offer needs carrier map, build it here (omitted for brevity)
-    carriers = {}  # or your real map
-    s = summarize_offer(cheapest, carriers)
-    s.update({
-        "origin": origin, "destination": dest,
-        "depart_date": iso(depart),
-        "return_date": iso(return_date),
-    })
-    # ↓↓↓ NEW: pass through the caps actually used for this search
-    s["cap_max_stops"] = max_stops
-    s["cap_max_flight_duration"] = max_flight_duration  # hours (per direction)
-    return s
-
-
 
 def run_search(cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
     env = resolve_amadeus_env(cfg)
