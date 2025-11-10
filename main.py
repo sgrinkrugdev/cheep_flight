@@ -275,6 +275,50 @@ def search_cheapest_for_window(
         segs = (itin or {}).get("segments", []) or []
         return max(0, len(segs) - 1)
 
+
+
+    # ---- apply filters: max_stops and max_flight_duration (per direction) ----
+    filtered = []
+    for o in offers:
+        it0 = o.get("itineraries", [{}])[0]
+        it1 = o.get("itineraries", [{}])[1] if len(o.get("itineraries", [])) > 1 else {}
+
+        # stops filter
+        if max_stops is not None:
+            if _stops_count(it0) > max_stops or _stops_count(it1) > max_stops:
+                continue
+
+        # duration per direction (door-to-door, includes layovers & tz offsets)
+        if max_flight_duration is not None:
+            cap_mins = int(float(max_flight_duration) * 60)
+            t0 = _direction_total_minutes(it0)
+            t1 = _direction_total_minutes(it1)
+            if (t0 is not None and t0 > cap_mins) or (t1 is not None and t1 > cap_mins):
+                continue
+
+        filtered.append(o)
+
+    if not filtered:
+        return None
+    offers = filtered
+
+    # choose cheapest remaining offer
+    cheapest = pick_cheapest_offer(offers)
+    if not cheapest:
+        return None
+
+    carriers = {}  # (optional map)
+    s = summarize_offer(cheapest, carriers)
+    s.update({
+        "origin": origin, "destination": dest,
+        "depart_date": iso(depart),
+        "return_date": iso(return_date),
+    })
+    s["cap_max_stops"] = max_stops
+    s["cap_max_flight_duration"] = max_flight_duration
+    return s
+
+
 def run_search(cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
     env = resolve_amadeus_env(cfg)
     endpoints = AMAD_ENDPOINTS[env]
