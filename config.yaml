@@ -6,6 +6,7 @@ max_stops: 0               # already supported; set 0 for nonstop, null for any
 max_flight_duration: 30    # NEW: total air time cap (hours) OUT+RET
 log_csv: cheapest_log.csv
 
+
 routes:
   - name: "London"
     origin: IAD
@@ -25,14 +26,14 @@ routes:
 #   max_stops: 1
 #   max_flight_duration: 20
 
- - name: "Paris"
-   origin: IAD
-   destination: CDG
-   start_date: "2026-07-06"
-   end_date:   "2026-07-29"
-   durations: [10]
-   max_stops: 1
-   max_flight_duration: 10
+  - name: "Paris"
+    origin: IAD
+    destination: CDG
+    start_date: "2026-07-06"
+    end_date:   "2026-07-29"
+    durations: [10]
+    max_stops: 1
+    max_flight_duration: 10
 
 # - name: "Porto"
 #   origin: IAD
@@ -43,14 +44,14 @@ routes:
 #   max_stops: 1
 #   max_flight_duration: 20
 
- - name: "Lisbon"
-   origin: IAD
-   destination: LIS
-   start_date: "2026-07-06"
-   end_date:   "2026-07-29"
-   durations: [10]
-   max_stops: 0
-   max_flight_duration: 10
+  - name: "Lisbon"
+    origin: IAD
+    destination: LIS
+    start_date: "2026-07-06"
+    end_date:   "2026-07-29"
+    durations: [10]
+    max_stops: 0
+    max_flight_duration: 10
 
 # - name: "Seville"
 #   origin: IAD
@@ -151,14 +152,14 @@ routes:
 #   max_stops: 1
 #   max_flight_duration: 20
 
- - name: "Athens"
-   origin: IAD
-   destination: ATH
-   start_date: "2026-07-06"
-   end_date:   "2026-07-29"
-   durations: [10]
-   max_stops: 1
-   max_flight_duration: 10
+  - name: "Athens"
+    origin: IAD
+    destination: ATH
+    start_date: "2026-07-06"
+    end_date:   "2026-07-29"
+    durations: [10]
+    max_stops: 1
+    max_flight_duration: 10
 
 # - name: "Stockholm"
 #   origin: IAD
