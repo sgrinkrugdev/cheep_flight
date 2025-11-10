@@ -42,7 +42,7 @@ routes:
     end_date:   "2026-07-29"
     durations: [10]
     max_stops: 1
-    max_flight_duration: 10
+    max_flight_duration: 12
 
 # - name: "Dublin"
 #   origin: IAD
@@ -203,6 +203,6 @@ email:
 
 
 amadeus:
-  env: test            # "test" (sandbox) or "prod"
+  env: prod            # "test" (sandbox) or "prod"
   api_key: ""          # optional fallback (usually leave blank)
   api_secret: ""       # optional fallback (usually leave blank)
