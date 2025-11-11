@@ -242,6 +242,8 @@ def search_cheapest_for_window(
     offers = data.get("data", [])
     if not offers:
         return None
+    raw_count = len(offers)
+    
     # ---- helpers to compute per-direction totals (prefer itinerary["duration"]) ----
     import re
 
@@ -305,7 +307,13 @@ def search_cheapest_for_window(
                 continue
 
         filtered.append(o)
-
+    post_filter_count = len(filtered)
+    if post_filter_count == 0:
+        print(f"[Amadeus] {origin}->{dest} {iso(depart)} dur={duration}d "
+              f"raw_offers={raw_count} => filtered=0 "
+              f"(max_stops={max_stops}, max_fd={max_flight_duration}h)")
+        return None
+        
     if not filtered:
         return None
     offers = filtered
