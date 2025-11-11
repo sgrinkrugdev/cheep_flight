@@ -11,8 +11,8 @@ routes:
   - name: "London"
     origin: IAD
     destination: LHR
-    start_date: "2026-07-06"
-    end_date:   "2026-07-29"
+    start_date: "2026-01-06"
+    end_date:   "2026-01-29"
     durations: [10]
     max_stops: 1
     max_flight_duration: 20
