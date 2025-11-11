@@ -16,6 +16,15 @@ routes:
     durations: [10]
     max_stops: 1
     max_flight_duration: 20
+
+  - #name: "Lisbon"
+    #origin: IAD
+    #destination: LIS
+    #start_date: "2026-07-06"
+    #end_date:   "2026-07-29"
+    #durations: [10]
+    #max_stops: 1
+    #max_flight_duration: 20
     
   #- name: "Paris"
    # origin: IAD
@@ -26,14 +35,7 @@ routes:
     #max_stops: 1
     #max_flight_duration: 20
 
-  - name: "Lisbon"
-    origin: IAD
-    destination: LIS
-    start_date: "2026-07-06"
-    end_date:   "2026-07-29"
-    durations: [10]
-    max_stops: 1
-    max_flight_duration: 20
+
 
   #- name: "Athens"
    # origin: IAD
