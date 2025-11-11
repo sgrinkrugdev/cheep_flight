@@ -223,6 +223,10 @@ def search_cheapest_for_window(
         "max": "250",
         # no 'sort' in test env
     }
+    # Help Amadeus price like US Google results and return the cheapest first
+    params["sourceCountry"] = os.getenv("AMAD_SOURCE_COUNTRY", "US")
+    params["sort"] = "PRICE"  # PROD honors; TEST may ignore
+
     if cabin:
         params["travelClass"] = cabin
 
