@@ -243,6 +243,18 @@ def search_cheapest_for_window(
     if not offers:
         return None
     raw_count = len(offers)
+
+    preview = sorted(
+        offers,
+        key=lambda o: float(o.get("price", {}).get("grandTotal", "inf"))
+    )[:3]
+    for i, o in enumerate(preview, 1):
+        gt = o.get("price", {}).get("grandTotal")
+        cur = o.get("price", {}).get("currency")
+        val = (o.get("validatingAirlineCodes") or ["?"])[0]
+        its = o.get("itineraries", [])
+        durs = [it.get("duration", "") for it in its]
+        print(f"[Amadeus] prefilter #{i}: {val} {gt} {cur} durations={durs}")
     
     # ---- helpers to compute per-direction totals (prefer itinerary["duration"]) ----
     import re
