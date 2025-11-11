@@ -232,16 +232,43 @@ def search_cheapest_for_window(
 
     headers = {"Authorization": f"Bearer {token}"}
     resp = requests.get(search_url, headers=headers, params=params, timeout=30)
+
+    # DEBUG: show the fully-resolved URL and status
+    print(f"[Amadeus] GET {resp.url}", flush=True)
+    print(f"[Amadeus] Status={resp.status_code}", flush=True)
+
     if resp.status_code >= 400:
         print(f"[Amadeus] HTTP {resp.status_code} {origin}->{dest} {iso(depart)} params={params}", flush=True)
         return None
 
     data = resp.json()
     offers = data.get("data", []) or []
+
+    if "errors" in data:
+        print("[Amadeus] API errors:", json.dumps(data["errors"], indent=2), flush=True)
+    if "warnings" in data:
+        print("[Amadeus] API warnings:", json.dumps(data["warnings"], indent=2), flush=True)
+    if "meta" in data:
+        print("[Amadeus] meta:", json.dumps(data["meta"], indent=2), flush=True)
+
+    
     if not offers:
         print(f"[Amadeus] 0 offers {origin}->{dest} {iso(depart)} params={params}", flush=True)
         return None
 
+    # DEBUG: peek at first 3 offers
+    try:
+        peek = []
+        for o in offers[:3]:
+            price = safe_get(o, ["price", "grandTotal"], safe_get(o, ["price","total"], ""))
+            its = o.get("itineraries", [])
+            stops_out = max(0, len((its[0].get("segments", []) if its else [])) - 1) if its else None
+            stops_ret = max(0, len((its[1].get("segments", []) if len(its)>1 else [])) - 1) if len(its)>1 else None
+            peek.append({"price": price, "stops_out": stops_out, "stops_ret": stops_ret})
+        print("[Amadeus] sample offers:", json.dumps(peek, indent=2), flush=True)
+    except Exception as _e:
+        print("[Amadeus] peek error:", _e, flush=True)
+    
     # ---- helpers (INSIDE the function) ----
     import re
     _ISO8601_DUR_RE = re.compile(r"^P(?:(?P<days>\d+)D)?(?:T(?:(?P<hours>\d+)H)?(?:(?P<minutes>\d+)M)?)?$")
