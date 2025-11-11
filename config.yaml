@@ -14,8 +14,8 @@ routes:
     start_date: "2026-07-06"
     end_date:   "2026-07-29"
     durations: [10]
-    max_stops: 0
-    max_flight_duration: 9
+    max_stops: 1
+    max_flight_duration: 20
     
   #- name: "Paris"
    # origin: IAD
@@ -24,7 +24,7 @@ routes:
     #end_date:   "2026-07-29"
     #durations: [10]
     #max_stops: 1
-    #max_flight_duration: 10
+    #max_flight_duration: 20
 
   - name: "Lisbon"
     origin: IAD
