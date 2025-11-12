@@ -210,7 +210,7 @@ def search_cheapest_for_window(
     cabin: Optional[str],
     currency: str,
     max_stops: Optional[int],
-    max_flight_duration: Optional[float],  # hours, per direction
+    max_flight_duration: Optional[float],
 ) -> Optional[Dict[str, Any]]:
     return_date = depart + timedelta(days=duration)
     params = {
@@ -221,33 +221,59 @@ def search_cheapest_for_window(
         "adults": str(adults),
         "currencyCode": currency,
         "max": "250",
-        # no 'sort' in test env
+        # test may ignore, prod usually honors:
+        "sort": "PRICE",
+        "sourceCountry": os.getenv("AMAD_SOURCE_COUNTRY", "US"),
     }
     if cabin:
         params["travelClass"] = cabin
-
-    # If caller wants nonstop, let Amadeus filter at the source.
     if max_stops == 0:
-       params["nonStop"] = "true"
+        params["nonStop"] = "true"
 
     headers = {"Authorization": f"Bearer {token}"}
     resp = requests.get(search_url, headers=headers, params=params, timeout=30)
-    if resp.status_code >= 400:
-        return None
-    data = resp.json()
-    offers = data.get("data", [])
-    if not offers:
-        return None
-    # ---- helpers to compute per-direction totals (prefer itinerary["duration"]) ----
-    import re
 
+    # DEBUG: show the fully-resolved URL and status
+    print(f"[Amadeus] GET {resp.url}", flush=True)
+    print(f"[Amadeus] Status={resp.status_code}", flush=True)
+
+    if resp.status_code >= 400:
+        print(f"[Amadeus] HTTP {resp.status_code} {origin}->{dest} {iso(depart)} params={params}", flush=True)
+        return None
+
+    data = resp.json()
+    offers = data.get("data", []) or []
+
+    if "errors" in data:
+        print("[Amadeus] API errors:", json.dumps(data["errors"], indent=2), flush=True)
+    if "warnings" in data:
+        print("[Amadeus] API warnings:", json.dumps(data["warnings"], indent=2), flush=True)
+    if "meta" in data:
+        print("[Amadeus] meta:", json.dumps(data["meta"], indent=2), flush=True)
+
+    
+    if not offers:
+        print(f"[Amadeus] 0 offers {origin}->{dest} {iso(depart)} params={params}", flush=True)
+        return None
+
+    # DEBUG: peek at first 3 offers
+    try:
+        peek = []
+        for o in offers[:3]:
+            price = safe_get(o, ["price", "grandTotal"], safe_get(o, ["price","total"], ""))
+            its = o.get("itineraries", [])
+            stops_out = max(0, len((its[0].get("segments", []) if its else [])) - 1) if its else None
+            stops_ret = max(0, len((its[1].get("segments", []) if len(its)>1 else [])) - 1) if len(its)>1 else None
+            peek.append({"price": price, "stops_out": stops_out, "stops_ret": stops_ret})
+        print("[Amadeus] sample offers:", json.dumps(peek, indent=2), flush=True)
+    except Exception as _e:
+        print("[Amadeus] peek error:", _e, flush=True)
+    
+    # ---- helpers (INSIDE the function) ----
+    import re
     _ISO8601_DUR_RE = re.compile(r"^P(?:(?P<days>\d+)D)?(?:T(?:(?P<hours>\d+)H)?(?:(?P<minutes>\d+)M)?)?$")
 
     def _minutes_from_iso8601(dur: str) -> Optional[int]:
-        """
-        Parse 'PT8H45M', 'PT9H', 'P1DT2H', 'PT55M' into total minutes.
-        Returns None if not parseable.
-        """
         if not isinstance(dur, str):
             return None
         m = _ISO8601_DUR_RE.match(dur)
@@ -258,41 +284,38 @@ def search_cheapest_for_window(
         minutes = int(m.group("minutes") or 0)
         return days * 24 * 60 + hours * 60 + minutes
 
+    def _parse_dt(s: str):
+        if not s:
+            return None
+        return datetime.fromisoformat(s.replace("Z", "+00:00"))
+
     def _direction_total_minutes(itin: dict) -> Optional[int]:
-        # 1) Prefer Amadeus itinerary door-to-door duration (includes layovers)
-        dur_str = (itin or {}).get("duration", "")
-        mins = _minutes_from_iso8601(dur_str)
+        mins = _minutes_from_iso8601((itin or {}).get("duration", ""))
         if mins is not None:
             return mins
-
-        # 2) Fallback: compute from first departure → last arrival timestamps
         segs = (itin or {}).get("segments", []) or []
         if not segs:
             return None
-        first_dep = _parse_iso(segs[0].get("departure", {}).get("at", ""))
-        last_arr  = _parse_iso(segs[-1].get("arrival", {}).get("at", ""))
-        if not first_dep or not last_arr:
+        a, b = _parse_dt(segs[0]["departure"]["at"]), _parse_dt(segs[-1]["arrival"]["at"])
+        if not a or not b:
             return None
-        return int((last_arr - first_dep).total_seconds() // 60)
+        return int((b - a).total_seconds() // 60)
 
     def _stops_count(itin: dict) -> int:
         segs = (itin or {}).get("segments", []) or []
         return max(0, len(segs) - 1)
 
-
-
-    # ---- apply filters: max_stops and max_flight_duration (per direction) ----
+    # ---- filtering ----
+    raw_count = len(offers)
     filtered = []
     for o in offers:
-        it0 = o.get("itineraries", [{}])[0]
-        it1 = o.get("itineraries", [{}])[1] if len(o.get("itineraries", [])) > 1 else {}
+        it0 = (o.get("itineraries") or [{}])[0]
+        it1 = (o.get("itineraries") or [{}])[1] if len(o.get("itineraries") or []) > 1 else {}
 
-        # stops filter
         if max_stops is not None:
             if _stops_count(it0) > max_stops or _stops_count(it1) > max_stops:
                 continue
 
-        # duration per direction (door-to-door, includes layovers & tz offsets)
         if max_flight_duration is not None:
             cap_mins = int(float(max_flight_duration) * 60)
             t0 = _direction_total_minutes(it0)
@@ -303,24 +326,27 @@ def search_cheapest_for_window(
         filtered.append(o)
 
     if not filtered:
+        print(f"[Amadeus] {origin}->{dest} {iso(depart)} dur={duration}d "
+              f"raw_offers={raw_count} => filtered=0 (stops≤{max_stops}, per-dir≤{max_flight_duration}h)",
+              flush=True)
         return None
-    offers = filtered
 
-    # choose cheapest remaining offer
-    cheapest = pick_cheapest_offer(offers)
+    cheapest = pick_cheapest_offer(filtered)
     if not cheapest:
         return None
 
-    carriers = {}  # (optional map)
-    s = summarize_offer(cheapest, carriers)
+    s = summarize_offer(cheapest, {})
     s.update({
-        "origin": origin, "destination": dest,
+        "origin": origin,
+        "destination": dest,
         "depart_date": iso(depart),
         "return_date": iso(return_date),
+        "cap_max_stops": max_stops,
+        "cap_max_flight_duration": max_flight_duration,
     })
-    s["cap_max_stops"] = max_stops
-    s["cap_max_flight_duration"] = max_flight_duration
     return s
+
+
 
 
 def run_search(cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
