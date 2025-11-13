@@ -8,6 +8,16 @@ log_csv: cheapest_log.csv
 
 
 routes:
+
+  - name: "Madrid-Athens-Test" # This is a test flight, don't really need it - testing TEST environment
+    origin: MAD
+    destination: ATH
+    start_date: "2026-01-06"
+    end_date: "2026-01-29"
+    durations: [10]
+    max_stops: 1
+    max_flight_duration: 20
+
   - name: "London"
     origin: IAD
     destination: LHR
