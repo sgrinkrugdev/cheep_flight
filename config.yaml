@@ -17,7 +17,7 @@ routes:
     max_stops: 1
     max_flight_duration: 20
 
-   - name: "Lisbon"
+  - name: "Lisbon"
     origin: IAD
     destination: LIS
     start_date: "2026-07-06"
@@ -205,6 +205,6 @@ email:
 
 
 amadeus:
-  env: prod            # "test" (sandbox) or "prod"
+  env: test            # "test" (sandbox) or "prod"
   api_key: ""          # optional fallback (usually leave blank)
   api_secret: ""       # optional fallback (usually leave blank)
