@@ -551,7 +551,7 @@ def build_daily_digest(best, cfg):
         key = (r.get("route_name", ""), int(r.get("duration_days", 0)))
         found_map[key] = r
 
-    #fixing the issue of local time vs UTC and PROD/TEST indicator
+    #fixing the issue of local time vs UTC and PROD/TEST indicator 
     #now = datetime.now().strftime("%Y-%m-%d %H:%M")
     #lines = [f"<h2>Daily Flight Watcher — {now}</h2>"]
 
