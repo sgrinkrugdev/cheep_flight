@@ -62,14 +62,19 @@ jobs:
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config --global pull.rebase true
           git config --global rebase.autoStash true
-      
+          
           # 1) Stage & commit FIRST so there are no unstaged changes
           git add cheapest_log.csv
           git commit -m "Update cheapest_log.csv [skip ci]" || echo "No CSV changes"
-      
-          # 2) Now safely rebase on latest remote and push
-          git pull --rebase origin "${GITHUB_REF_NAME}"
-          git push origin HEAD:"${GITHUB_REF_NAME}"
+          
+          # 2) Safely rebase on latest remote and push with retries
+          git pull --rebase origin "${GITHUB_REF_NAME}" || true
+          for i in 1 2 3; do
+            git push origin HEAD:"${GITHUB_REF_NAME}" && break
+            echo "Push failed, retrying in 10s (attempt $i)..."
+            sleep 10
+          done
+
       
       - name: Install rclone
         if: always()

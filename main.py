@@ -489,6 +489,8 @@ def build_daily_digest(best, cfg):
       • If no results for a route+duration: show "No Flights" and the filters footer.
     Dates in headers are formatted as "DD Mon".
     """
+    env = os.getenv("AMADEUS_ENV") or cfg.get("amadeus", {}).get("env", "prod")
+
 
     from datetime import datetime as _dt, timedelta
 
@@ -577,8 +579,23 @@ def build_daily_digest(best, cfg):
         key = (r.get("route_name", ""), int(r.get("duration_days", 0)))
         found_map[key] = r
 
-    now = datetime.now().strftime("%Y-%m-%d %H:%M")
-    lines = [f"<h2>Daily Flight Watcher — {now}</h2>"]
+    #fixing the issue of local time vs UTC and PROD/TEST indicator 
+    #now = datetime.now().strftime("%Y-%m-%d %H:%M")
+    #lines = [f"<h2>Daily Flight Watcher — {now}</h2>"]
+
+    from datetime import datetime
+    import pytz
+
+    # Local timezone conversion
+    local_tz = pytz.timezone("America/New_York")
+    local_time = datetime.now(local_tz)
+    time_str = local_time.strftime("%Y-%m-%d %H:%M %Z")
+
+    # Add TEST marker if applicable
+    env_marker = " TEST" if env == "test" else ""
+
+    lines = [f"<h2>Daily Flight Watcher — {time_str}{env_marker}</h2>"]
+
 
     routes = cfg.get("routes", [])
     # Global defaults
