@@ -463,7 +463,8 @@ def build_daily_digest(best, cfg):
       • If no results for a route+duration: show "No Flights" and the filters footer.
     Dates in headers are formatted as "DD Mon".
     """
-    env = cfg.get("amadeus", {}).get("env", "prod")
+    env = os.getenv("AMADEUS_ENV") or cfg.get("amadeus", {}).get("env", "prod")
+
 
     from datetime import datetime as _dt, timedelta
 
