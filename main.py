@@ -1,4 +1,4 @@
-#!/usr/bin/env python3 # This should be in main branch
+#!/usr/bin/env python3 # This is really V2
 import os, sys, csv, math, json, requests, traceback
 from datetime import datetime, timedelta, date
 from typing import List, Dict, Any, Optional
