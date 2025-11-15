@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3 #and this is main
 import os, sys, csv, math, json, requests, traceback
 from datetime import datetime, timedelta, date
 from typing import List, Dict, Any, Optional
