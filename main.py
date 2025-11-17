@@ -227,6 +227,13 @@ def search_cheapest_for_window(
     }
     if cabin:
         params["travelClass"] = cabin
+    #search does not return UA which has the cheapest flight. 
+    # let try to limit the serch to UA.
+    # this is debugging debuggin only.
+    #todo: remove this block
+    params["includedAirlineCodes"] = "UA"
+
+
     #if max_stops == 0: #comment out to troubleshoot 11/17
     #    params["nonStop"] = "true" #comment out to troubleshoot 11/17
 
