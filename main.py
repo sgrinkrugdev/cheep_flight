@@ -239,7 +239,11 @@ def search_cheapest_for_window(
 
     if resp.status_code >= 400:
         print(f"[Amadeus] HTTP {resp.status_code} {origin}->{dest} {iso(depart)} params={params}", flush=True)
-        return None
+        try:
+            print("[Amadeus] Error body:", resp.text[:500], flush=True)
+        except Exception:
+            pass
+        return None        
 
     data = resp.json()
     offers = data.get("data", []) or []
