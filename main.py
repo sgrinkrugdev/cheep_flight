@@ -223,7 +223,7 @@ def search_cheapest_for_window(
         "max": "250",
         # test may ignore, prod usually honors:
         #"sort": "PRICE",
-        "sourceCountry": os.getenv("AMAD_SOURCE_COUNTRY", "US"),
+        #"sourceCountry": os.getenv("AMAD_SOURCE_COUNTRY", "US"),
     }
     if cabin:
         params["travelClass"] = cabin
