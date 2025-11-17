@@ -19,7 +19,7 @@ routes:
     #max_flight_duration: 20
 
   - name: "London"
-    origin: IAD
+    origin: WAS
     destination: LHR
     start_date: "2026-07-06"
     end_date:   "2026-07-29"
