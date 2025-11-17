@@ -222,13 +222,13 @@ def search_cheapest_for_window(
         "currencyCode": currency,
         "max": "250",
         # test may ignore, prod usually honors:
-        "sort": "PRICE",
+        #"sort": "PRICE",
         "sourceCountry": os.getenv("AMAD_SOURCE_COUNTRY", "US"),
     }
     if cabin:
         params["travelClass"] = cabin
-    if max_stops == 0:
-        params["nonStop"] = "true"
+    #if max_stops == 0: #comment out to troubleshoot 11/17
+    #    params["nonStop"] = "true" #comment out to troubleshoot 11/17
 
     headers = {"Authorization": f"Bearer {token}"}
     resp = requests.get(search_url, headers=headers, params=params, timeout=30)
