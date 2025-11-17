@@ -4,14 +4,25 @@ from datetime import datetime, timedelta, date
 from typing import List, Dict, Any, Optional
 import yaml
 
+#AMAD_ENDPOINTS = {
+#    "test": {
+#        "auth":   "https://test.api.amadeus.com/v1/security/oauth2/token",
+#        "search": "https://test.api.amadeus.com/v2/shopping/flight-offers",
+#    },
+#    "prod": {
+#        "auth":   "https://api.amadeus.com/v1/security/oauth2/token",
+#        "search": "https://api.amadeus.com/v2/shopping/flight-offers",
+#    },
+#}
+
 AMAD_ENDPOINTS = {
     "test": {
         "auth":   "https://test.api.amadeus.com/v1/security/oauth2/token",
-        "search": "https://test.api.amadeus.com/v2/shopping/flight-offers",
+        "search": "https://test.api.amadeus.com/v2/shopping/flight-offers-search",
     },
     "prod": {
         "auth":   "https://api.amadeus.com/v1/security/oauth2/token",
-        "search": "https://api.amadeus.com/v2/shopping/flight-offers",
+        "search": "https://api.amadeus.com/v2/shopping/flight-offers-search",
     },
 }
 
